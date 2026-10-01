@@ -18,7 +18,7 @@ import {
   Check,
   AlertCircle
 } from 'lucide-react';
-import { Hotel, RoomType, Review } from '@/src/types';
+import { Lodging, RoomType, Review } from '@/src/types';
 import { 
   fetchHotelById, 
   fetchHotelRooms, 
@@ -46,7 +46,7 @@ interface HotelDetailPageProps {
   };
   onBack: () => void;
   onProceedToBooking: (bookingPayload: {
-    hotel: Hotel;
+    hotel: Lodging;
     roomType: RoomType;
     checkIn: string;
     checkOut: string;
@@ -68,7 +68,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 }) => {
   const { user } = useAuth();
   
-  const [hotel, setHotel] = useState<Hotel | null>(null);
+  const [hotel, setHotel] = useState<Lodging | null>(null);
   const [rooms, setRooms] = useState<RoomType[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -156,7 +156,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
         ]);
 
         if (hotelRes.error || !hotelRes.data) {
-          setErrorMsg('Impossible de charger les détails de cet établissement.');
+          setErrorMsg('Impossible de charger les détails de ce logement.');
         } else {
           setHotel(hotelRes.data);
           setRooms(roomsRes.data || []);
@@ -247,7 +247,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
       <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-6">
         <div className="text-center space-y-3">
           <Loader2 className="animate-spin text-[#3F6212] mx-auto" size={36} />
-          <p className="text-sm font-semibold text-[#6B6658]">Chargement de l'établissement...</p>
+          <p className="text-sm font-semibold text-[#6B6658]">Chargement du logement...</p>
         </div>
       </div>
     );
@@ -259,8 +259,8 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
         <div className="w-16 h-16 bg-[#F0EDE4] text-[#8B5E34] rounded-full flex items-center justify-center mx-auto">
           <AlertCircle size={32} />
         </div>
-        <h2 className="text-2xl font-serif font-bold text-[#2D2A26]">Établissement non trouvé</h2>
-        <p className="text-sm text-[#6B6658]">{errorMsg || 'Cet hôtel n’existe pas ou a été supprimé.'}</p>
+        <h2 className="text-2xl font-serif font-bold text-[#2D2A26]">Logement non trouvé</h2>
+        <p className="text-sm text-[#6B6658]">{errorMsg || 'Ce logement n’existe pas ou a été supprimé.'}</p>
         <button
           type="button"
           onClick={onBack}
@@ -326,7 +326,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-8">
         
-        {/* HOTEL HEADER INFO */}
+        {/* LODGING HEADER INFO */}
         <div>
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <span className="bg-[#ECF3E5] text-[#3F6212] text-xs font-bold px-2.5 py-0.5 rounded-md uppercase border border-[#D1DBC2]">
@@ -409,7 +409,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
             
             {/* Description card */}
             <div className="bg-white p-6 rounded-2xl border border-[#E6E2D3] shadow-xs space-y-4">
-              <h3 className="text-lg font-serif font-bold text-[#2D2A26]">À propos de l'établissement</h3>
+              <h3 className="text-lg font-serif font-bold text-[#2D2A26]">À propos du logement</h3>
               <p className="text-sm text-[#2D2A26] leading-relaxed whitespace-pre-line">
                 {hotel.description}
               </p>
@@ -446,18 +446,18 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xl font-serif font-bold text-[#2D2A26]">
-                    Disponibilités & Chambres
+                    Disponibilités & unités
                   </h3>
                   <p className="text-xs text-[#6B6658]">
-                    Sélectionnez la formule qui vous convient pour {nightsCount} nuit{nightsCount > 1 ? 's' : ''}
+                    Sélectionnez l’unité qui vous convient pour {nightsCount} nuit{nightsCount > 1 ? 's' : ''}
                   </p>
                 </div>
               </div>
 
               {rooms.length === 0 ? (
                 <div className="bg-white p-8 rounded-2xl border border-[#E6E2D3] text-center space-y-2">
-                  <p className="text-sm font-bold text-[#2D2A26]">Aucun type de chambre enregistré pour cet hôtel</p>
-                  <p className="text-xs text-[#6B6658]">L'hôtelier n'a pas encore ajouté ses chambres.</p>
+                  <p className="text-sm font-bold text-[#2D2A26]">Aucune unité enregistrée pour ce logement</p>
+                  <p className="text-xs text-[#6B6658]">Le gestionnaire n'a pas encore ajouté les unités de ce logement.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -624,7 +624,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
               {/* Selected Room Details */}
               {selectedRoom ? (
                 <div className="bg-[#ECF3E5] p-3.5 rounded-xl border border-[#D1DBC2] space-y-1">
-                  <p className="text-[11px] font-bold text-[#3F6212] uppercase">Chambre sélectionnée :</p>
+                  <p className="text-[11px] font-bold text-[#3F6212] uppercase">Unité sélectionnée :</p>
                   <p className="text-xs font-bold text-[#2D2A26]">{selectedRoom.name}</p>
                   <p className="text-xs text-[#8B5E34] font-semibold">
                     {formatFCFA(roomPricingMap[selectedRoom.id]?.averageNightlyPrice || selectedRoom.price_per_night)} / nuit
@@ -682,7 +682,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               <div className="flex items-center gap-2 text-xs text-[#6B6658] pt-1">
                 <ShieldCheck size={16} className="text-[#3F6212] shrink-0" />
-                <span>Paiement direct à l'hôtel à l'arrivée</span>
+                <span>Paiement direct sur place à l'arrivée</span>
               </div>
             </div>
 

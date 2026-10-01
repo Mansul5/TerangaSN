@@ -12,7 +12,7 @@ import {
   Search,
   Check
 } from 'lucide-react';
-import { Hotel, SearchFilters, HOTEL_AMENITIES } from '@/src/types';
+import { Lodging, SearchFilters, HOTEL_AMENITIES, LodgingCategory } from '@/src/types';
 import { fetchHotels } from '@/src/lib/supabase/api';
 import { HotelCard } from '@/src/components/HotelCard';
 import { InteractiveMap } from '@/src/components/InteractiveMap';
@@ -32,7 +32,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
   onAuthRequired,
   onOpenSupabaseModal,
 }) => {
-  const [hotels, setHotels] = useState<Hotel[]>([]);
+  const [hotels, setHotels] = useState<Lodging[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [selectedHotelId, setSelectedHotelId] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
 
   const [maxPrice, setMaxPrice] = useState<number>(initialFilters.maxPrice || 350000);
   const [minRating, setMinRating] = useState<number>(initialFilters.minRating || 0);
-  const [category, setCategory] = useState<string>(initialFilters.category || 'all');
+  const [category, setCategory] = useState<LodgingCategory | 'all'>((initialFilters.category as LodgingCategory | 'all') || 'all');
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>(initialFilters.amenities || []);
   const [maxBeachDistance, setMaxBeachDistance] = useState<number>(0);
   const [sortBy, setSortBy] = useState<'recommended' | 'price_asc' | 'price_desc' | 'rating_desc'>('recommended');
@@ -138,10 +138,10 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E6E2D3]">
           <div>
             <h1 className="text-xl sm:text-2xl font-serif font-bold text-[#2D2A26]">
-              {destination ? `Hébergements à "${destination}"` : 'Tous les hébergements au Sénégal'}
+              {destination ? `Hébergements à "${destination}"` : 'Tous les logements au Sénégal'}
             </h1>
             <p className="text-xs text-[#6B6658] mt-0.5">
-              {totalCount} établissement{totalCount > 1 ? 's' : ''} trouvé{totalCount > 1 ? 's' : ''} • Tarifs en Francs CFA
+              {totalCount} logement{totalCount > 1 ? 's' : ''} trouvé{totalCount > 1 ? 's' : ''} • Tarifs en Francs CFA
             </p>
           </div>
 
@@ -261,11 +261,14 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
               </label>
               <div className="space-y-1.5 text-xs text-[#2D2A26]">
                 {[
-                  { id: 'all', label: 'Tous les types' },
-                  { id: 'hotel', label: 'Hôtel & Resort' },
-                  { id: 'lodge', label: 'Lodge & Écolodge' },
-                  { id: 'campement', label: 'Campement touristique' },
-                  { id: 'residence', label: 'Résidence & Appartement' },
+                  { id: 'all' as const, label: 'Tous les types' },
+                  { id: 'hotel' as const, label: 'Hôtel & Resort' },
+                  { id: 'residence' as const, label: 'Résidence' },
+                  { id: 'villa' as const, label: 'Villa' },
+                  { id: 'appartement' as const, label: 'Appartement' },
+                  { id: 'chambre_hotes' as const, label: "Chambre d'hôtes" },
+                  { id: 'lodge' as const, label: 'Lodge & Écolodge' },
+                  { id: 'campement' as const, label: 'Campement touristique' },
                 ].map((item) => (
                   <label 
                     key={item.id} 
@@ -295,9 +298,10 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
               <div className="space-y-1 text-xs text-[#2D2A26]">
                 {[
                   { val: 0, label: 'Toutes les notes' },
-                  { val: 8.0, label: '8.0+ Très bien' },
-                  { val: 8.5, label: '8.5+ Fabuleux' },
-                  { val: 9.0, label: '9.0+ Exceptionnel' },
+                  { val: 3.0, label: '3,0+ / 5' },
+                  { val: 3.5, label: '3,5+ / 5' },
+                  { val: 4.0, label: '4,0+ / 5' },
+                  { val: 4.5, label: '4,5+ / 5' },
                 ].map((r) => (
                   <label key={r.val} className="flex items-center gap-2 cursor-pointer hover:text-[#3F6212] py-0.5">
                     <input
@@ -375,7 +379,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
             {isLoading && (
               <div className="bg-white rounded-2xl p-12 border border-[#E6E2D3] text-center space-y-3">
                 <Loader2 className="animate-spin text-[#3F6212] mx-auto" size={32} />
-                <p className="text-xs font-semibold text-[#6B6658]">Recherche d'hébergements en cours...</p>
+                <p className="text-xs font-semibold text-[#6B6658]">Recherche de logements en cours...</p>
               </div>
             )}
 
@@ -387,7 +391,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
                 </div>
                 <div className="max-w-md mx-auto">
                   <h3 className="text-base font-serif font-bold text-[#2D2A26]">
-                    Aucun hôtel ne correspond à vos critères
+                    Aucun logement ne correspond à vos critères
                   </h3>
                   <p className="text-xs text-[#6B6658] mt-1 leading-relaxed">
                     Essayez d'élargir vos filtres (prix, équipements) ou de rechercher une autre destination au Sénégal.
@@ -475,10 +479,14 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
               <label className="text-xs font-bold text-[#2D2A26] block mb-2">Type d'hébergement</label>
               <div className="space-y-1.5 text-xs text-[#2D2A26]">
                 {[
-                  { id: 'all', label: 'Tous' },
-                  { id: 'hotel', label: 'Hôtel' },
-                  { id: 'lodge', label: 'Lodge' },
-                  { id: 'campement', label: 'Campement' },
+                  { id: 'all' as const, label: 'Tous' },
+                  { id: 'hotel' as const, label: 'Hôtel' },
+                  { id: 'residence' as const, label: 'Résidence' },
+                  { id: 'villa' as const, label: 'Villa' },
+                  { id: 'appartement' as const, label: 'Appartement' },
+                  { id: 'chambre_hotes' as const, label: "Chambre d'hôtes" },
+                  { id: 'lodge' as const, label: 'Lodge' },
+                  { id: 'campement' as const, label: 'Campement' },
                 ].map((cat) => (
                   <label key={cat.id} className="flex items-center gap-2">
                     <input
@@ -489,6 +497,27 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
                       className="accent-[#3F6212]"
                     />
                     <span>{cat.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Rating */}
+            <div>
+              <label className="text-xs font-bold text-[#2D2A26] block mb-2">
+                Note des clients
+              </label>
+              <div className="space-y-1.5 text-xs text-[#2D2A26]">
+                {[
+                  { val: 0, label: 'Toutes les notes' },
+                  { val: 3.0, label: '3,0+ / 5' },
+                  { val: 3.5, label: '3,5+ / 5' },
+                  { val: 4.0, label: '4,0+ / 5' },
+                  { val: 4.5, label: '4,5+ / 5' },
+                ].map((r) => (
+                  <label key={r.val} className="flex items-center gap-2">
+                    <input type="radio" name="m-rating" checked={minRating === r.val} onChange={() => setMinRating(r.val)} className="accent-[#3F6212]" />
+                    <span className={minRating === r.val ? 'font-bold text-[#3F6212]' : ''}>{r.label}</span>
                   </label>
                 ))}
               </div>
@@ -526,3 +555,5 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
     </div>
   );
 };
+
+export default SearchResultsPage;

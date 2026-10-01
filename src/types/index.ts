@@ -1,10 +1,35 @@
 export type UserRole = 'traveler' | 'owner' | 'admin';
 
-export type HotelCategory = 'hotel' | 'lodge' | 'campement' | 'residence';
+/**
+ * Types de logements disponibles sur TerangaSN.
+ *
+ * Le terme "logement" est désormais le concept générique.
+ * "Hôtel" n'est qu'un type parmi les autres.
+ */
+export type LodgingCategory =
+  | 'hotel'
+  | 'lodge'
+  | 'campement'
+  | 'residence'
+  | 'villa'
+  | 'appartement'
+  | 'chambre_hotes';
 
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+/**
+ * Alias temporaire de compatibilité.
+ */
+export type HotelCategory = LodgingCategory;
 
-export type CancellationPolicy = 'free_cancellation' | 'flexible' | 'non_refundable';
+export type BookingStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'cancelled'
+  | 'completed';
+
+export type CancellationPolicy =
+  | 'free_cancellation'
+  | 'flexible'
+  | 'non_refundable';
 
 export interface Profile {
   id: string;
@@ -17,13 +42,24 @@ export interface Profile {
   updated_at?: string;
 }
 
-export interface Hotel {
+/**
+ * Entité générique représentant un logement.
+ *
+ * Un logement peut être un hôtel, une résidence, une villa,
+ * un appartement, une chambre d'hôtes, un lodge ou un campement.
+ *
+ * IMPORTANT :
+ * Les noms des champs liés à Supabase (notamment hotel_id dans
+ * les autres interfaces) sont conservés pour le moment afin
+ * de ne pas casser la structure actuelle de la base de données.
+ */
+export interface Lodging {
   id: string;
   owner_id: string;
   name: string;
   slug?: string;
   description: string;
-  category: HotelCategory;
+  category: LodgingCategory;
   region: string;
   city: string;
   address: string;
@@ -46,17 +82,33 @@ export interface Hotel {
   min_price: number;
   created_at: string;
   updated_at?: string;
+
   // Joined fields
   room_types?: RoomType[];
   owner?: Profile;
 }
 
+/**
+ * Alias temporaire de compatibilité.
+ *
+ * Les fichiers existants qui utilisent encore "Hotel"
+ * continuent donc de fonctionner pendant la migration
+ * progressive vers "Lodging".
+ */
+export type Hotel = Lodging;
+
 export interface RoomType {
   id: string;
+
+  /**
+   * Conservé sous le nom hotel_id pour correspondre
+   * à la structure actuelle de la base Supabase.
+   */
   hotel_id: string;
+
   name: string;
   description: string | null;
-  price_per_night: number; // in FCFA
+  price_per_night: number;
   capacity_adults: number;
   capacity_children: number;
   total_rooms: number;
@@ -72,9 +124,9 @@ export interface RoomType {
 export interface RoomAvailability {
   id: string;
   room_type_id: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   rooms_available: number;
-  price_override: number | null; // in FCFA
+  price_override: number | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -82,17 +134,23 @@ export interface RoomAvailability {
 export interface Booking {
   id: string;
   booking_number: string;
+
+  /**
+   * Conservé sous le nom hotel_id pour correspondre
+   * à la structure actuelle de la base Supabase.
+   */
   hotel_id: string;
+
   room_type_id: string;
   user_id: string | null;
-  check_in: string; // YYYY-MM-DD
-  check_out: string; // YYYY-MM-DD
+  check_in: string;
+  check_out: string;
   guests_adults: number;
   guests_children: number;
   rooms_count: number;
   nights_count: number;
-  total_price: number; // in FCFA
-  commission_amount: number; // in FCFA
+  total_price: number;
+  commission_amount: number;
   guest_name: string;
   guest_email: string;
   guest_phone: string;
@@ -101,6 +159,7 @@ export interface Booking {
   payment_status: 'on_site_unpaid' | 'on_site_paid';
   created_at: string;
   updated_at?: string;
+
   // Joined fields
   hotel?: Hotel;
   room_type?: RoomType;
@@ -108,7 +167,13 @@ export interface Booking {
 
 export interface Review {
   id: string;
+
+  /**
+   * Conservé sous le nom hotel_id pour correspondre
+   * à la structure actuelle de la base Supabase.
+   */
   hotel_id: string;
+
   user_id: string;
   booking_id: string | null;
   rating: number;
@@ -120,6 +185,7 @@ export interface Review {
   guest_name: string;
   status: 'approved' | 'pending' | 'rejected';
   created_at: string;
+
   // Joined fields
   hotel?: Hotel;
 }
@@ -127,7 +193,13 @@ export interface Review {
 export interface Favorite {
   id: string;
   user_id: string;
+
+  /**
+   * Conservé sous le nom hotel_id pour correspondre
+   * à la structure actuelle de la base Supabase.
+   */
   hotel_id: string;
+
   created_at: string;
   hotel?: Hotel;
 }
@@ -142,33 +214,148 @@ export interface SearchFilters {
   minPrice?: number;
   maxPrice?: number;
   minRating?: number;
-  category?: string;
+
+  /**
+   * Catégorie de logement.
+   */
+  category?: LodgingCategory | string;
+
   amenities: string[];
   maxBeachDistance?: number;
-  sortBy?: 'recommended' | 'price_asc' | 'price_desc' | 'rating_desc';
+
+  sortBy?:
+    | 'recommended'
+    | 'price_asc'
+    | 'price_desc'
+    | 'rating_desc';
 }
 
 export const SENEGAL_REGIONS = [
-  { id: 'dakar', name: 'Dakar', image: 'https://images.unsplash.com/photo-1577942296181-a67b4478ecf8?auto=format&fit=crop&w=800&q=80', description: 'Capitale vibrante, Almadies, Ngor, Corniche et vie culturelle' },
-  { id: 'saly', name: 'Saly / Petite Côte', image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80', description: 'Plages de sable fin, stations balnéaires et sports nautiques' },
-  { id: 'saint-louis', name: 'Saint-Louis', image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80', description: 'Ville coloniale historique, jazz, fleuve Sénégal et Langue de Barbarie' },
-  { id: 'cap-skirring', name: 'Cap Skirring / Casamance', image: 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=800&q=80', description: 'Nature luxuriante, bolongs, traditions diola et plages sauvages' },
-  { id: 'sine-saloum', name: 'Sine Saloum', image: 'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=800&q=80', description: 'Delta majestueux, îles d’oiseaux, pirogues et écolodges paisibles' },
-  { id: 'lac-rose', name: 'Lac Rose', image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80', description: 'Dunes, ramassage traditionnel de sel et balades en quad' },
-  { id: 'goree', name: 'Île de Gorée', image: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80', description: 'Île mémoire chargée d’histoire, ruelles fleuries et patrimoine UNESCO' },
+  {
+    id: 'dakar',
+    name: 'Dakar',
+    image:
+      'https://images.unsplash.com/photo-1577942296181-a67b4478ecf8?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Capitale vibrante, Almadies, Ngor, Corniche et vie culturelle',
+  },
+  {
+    id: 'saly',
+    name: 'Saly / Petite Côte',
+    image:
+      'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Plages de sable fin, stations balnéaires et sports nautiques',
+  },
+  {
+    id: 'saint-louis',
+    name: 'Saint-Louis',
+    image:
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Ville coloniale historique, jazz, fleuve Sénégal et Langue de Barbarie',
+  },
+  {
+    id: 'cap-skirring',
+    name: 'Cap Skirring / Casamance',
+    image:
+      'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Nature luxuriante, bolongs, traditions diola et plages sauvages',
+  },
+  {
+    id: 'sine-saloum',
+    name: 'Sine Saloum',
+    image:
+      'https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Delta majestueux, îles d’oiseaux, pirogues et écolodges paisibles',
+  },
+  {
+    id: 'lac-rose',
+    name: 'Lac Rose',
+    image:
+      'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Dunes, ramassage traditionnel de sel et balades en quad',
+  },
+  {
+    id: 'goree',
+    name: 'Île de Gorée',
+    image:
+      'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=800&q=80',
+    description:
+      'Île mémoire chargée d’histoire, ruelles fleuries et patrimoine UNESCO',
+  },
 ] as const;
 
-export const HOTEL_AMENITIES = [
-  { id: 'wifi', label: 'Wi-Fi haut débit', icon: 'Wifi' },
-  { id: 'pool', label: 'Piscine', icon: 'Waves' },
-  { id: 'ac', label: 'Climatisation', icon: 'AirVent' },
-  { id: 'breakfast', label: 'Petit-déjeuner inclus', icon: 'Coffee' },
-  { id: 'sea_view', label: 'Vue sur la mer', icon: 'Eye' },
-  { id: 'parking', label: 'Parking gratuit', icon: 'Car' },
-  { id: 'restaurant', label: 'Restaurant sur place', icon: 'Utensils' },
-  { id: 'bar', label: 'Bar / Salon', icon: 'Wine' },
-  { id: 'spa', label: 'Spa & Bien-être', icon: 'Sparkles' },
-  { id: 'generator', label: 'Groupe électrogène / Solaire', icon: 'Zap' },
-  { id: 'airport_shuttle', label: 'Navette Aéroport (AIBD)', icon: 'Plane' },
-  { id: 'beachfront', label: 'Accès direct plage', icon: 'Sun' },
+/**
+ * Équipements génériques des logements.
+ */
+export const LODGING_AMENITIES = [
+  {
+    id: 'wifi',
+    label: 'Wi-Fi haut débit',
+    icon: 'Wifi',
+  },
+  {
+    id: 'pool',
+    label: 'Piscine',
+    icon: 'Waves',
+  },
+  {
+    id: 'ac',
+    label: 'Climatisation',
+    icon: 'AirVent',
+  },
+  {
+    id: 'breakfast',
+    label: 'Petit-déjeuner inclus',
+    icon: 'Coffee',
+  },
+  {
+    id: 'sea_view',
+    label: 'Vue sur la mer',
+    icon: 'Eye',
+  },
+  {
+    id: 'parking',
+    label: 'Parking gratuit',
+    icon: 'Car',
+  },
+  {
+    id: 'restaurant',
+    label: 'Restaurant sur place',
+    icon: 'Utensils',
+  },
+  {
+    id: 'bar',
+    label: 'Bar / Salon',
+    icon: 'Wine',
+  },
+  {
+    id: 'spa',
+    label: 'Spa & Bien-être',
+    icon: 'Sparkles',
+  },
+  {
+    id: 'generator',
+    label: 'Groupe électrogène / Solaire',
+    icon: 'Zap',
+  },
+  {
+    id: 'airport_shuttle',
+    label: 'Navette Aéroport (AIBD)',
+    icon: 'Plane',
+  },
+  {
+    id: 'beachfront',
+    label: 'Accès direct plage',
+    icon: 'Sun',
+  },
 ] as const;
+
+/**
+ * Alias temporaire de compatibilité.
+ */
+export const HOTEL_AMENITIES = LODGING_AMENITIES;
