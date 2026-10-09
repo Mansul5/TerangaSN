@@ -2,14 +2,12 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { Navbar } from '@/src/components/Navbar';
 import { Footer } from '@/src/components/Footer';
 import { AuthModal } from '@/src/components/AuthModal';
 import { SupabaseSetupModal } from '@/src/components/SupabaseSetupModal';
-
 import { HomePage } from '@/src/pages/HomePage';
 import { SearchResultsPage } from '@/src/pages/SearchResultsPage';
 import { HotelDetailPage } from '@/src/pages/HotelDetailPage';
@@ -17,60 +15,51 @@ import { BookingTunnelPage } from '@/src/pages/BookingTunnelPage';
 import { TravelerDashboardPage } from '@/src/pages/TravelerDashboardPage';
 import { HotelierDashboardPage } from '@/src/pages/HotelierDashboardPage';
 import { AdminDashboardPage } from '@/src/pages/AdminDashboardPage';
+import { BecomeHostPage } from '@/src/pages/BecomeHostPage';
+import { HostTermsPage } from '@/src/pages/HostTermsPage';
+import { HostOnboardingPage } from '@/src/pages/HostOnboardingPage';
+import type { HostOnboardingData } from '@/src/pages/HostOnboardingPage';
+import type { Lodging, RoomType, SearchFilters, UserRole } from '@/src/types';
 
-import { Hotel, RoomType, SearchFilters, UserRole } from '@/src/types';
+type DashboardTab = 'bookings' | 'favorites' | 'profile';
+type HostMode = 'first-host' | 'add-lodging';
+type BookingPayload = {
+  hotel: Lodging;
+  roomType: RoomType;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  roomsCount: number;
+  nightsCount: number;
+  totalPrice: number;
+};
+
+const DEFAULT_FILTERS: Partial<SearchFilters> = {
+  destination: '', checkIn: '', checkOut: '', adults: 2, children: 0, rooms: 1,
+};
 
 function MainApp() {
-  const { isConfigured, user, role } = useAuth();
-
-  // Navigation State
-  const [currentView, setCurrentView] = useState<string>('home');
+  const { user, role } = useAuth();
+  const [currentView, setCurrentView] = useState('home');
   const [selectedHotelId, setSelectedHotelId] = useState<string | null>(null);
-  const [searchFilters, setSearchFilters] = useState<Partial<SearchFilters>>({
-    destination: '',
-    checkIn: '',
-    checkOut: '',
-    adults: 2,
-    children: 0,
-    rooms: 1,
-  });
-
-  // Booking Flow State
-  const [bookingPayload, setBookingPayload] = useState<{
-    hotel: Hotel;
-    roomType: RoomType;
-    checkIn: string;
-    checkOut: string;
-    adults: number;
-    children: number;
-    roomsCount: number;
-    nightsCount: number;
-    totalPrice: number;
-  } | null>(null);
-
-  // Traveler Dashboard sub-tab
-  const [dashboardTab, setDashboardTab] = useState<'bookings' | 'favorites' | 'profile'>('bookings');
-
-  // Modals state
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [searchFilters, setSearchFilters] = useState<Partial<SearchFilters>>({ ...DEFAULT_FILTERS });
+  const [bookingPayload, setBookingPayload] = useState<BookingPayload | null>(null);
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>('bookings');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
   const [authModalRole, setAuthModalRole] = useState<UserRole>('traveler');
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [pendingHostOnboarding, setPendingHostOnboarding] = useState<HostOnboardingData | null>(null);
+  const [hostOnboardingMode, setHostOnboardingMode] = useState<HostMode>('first-host');
+  const [hostAuthPending, setHostAuthPending] = useState(false);
 
-  // Scroll to top on view change
+  // Les informations d'onboarding sont temporaires : aucune écriture Supabase ici.
+  void pendingHostOnboarding;
+
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }, [currentView, selectedHotelId]);
-
-  const handleNavigate = (view: string, data?: any) => {
-    if (view === 'traveler-dashboard' && data?.tab) {
-      setDashboardTab(data.tab);
-    }
-    if (view === 'search' && data) {
-      setSearchFilters(prev => ({ ...prev, ...data }));
-    }
-    setCurrentView(view);
-  };
 
   const handleOpenAuth = (mode: 'signin' | 'signup' = 'signin', targetRole: UserRole = 'traveler') => {
     setAuthModalMode(mode);
@@ -78,13 +67,45 @@ function MainApp() {
     setIsAuthModalOpen(true);
   };
 
-  const handleSearchFromHome = (filters: any) => {
-    setSearchFilters(filters);
+  // Reprendre le parcours hôte après authentification, sans créer un compte owner.
+  useEffect(() => {
+    if (!hostAuthPending || !user || isAuthModalOpen) return;
+    setHostAuthPending(false);
+    setCurrentView('host-terms');
+  }, [hostAuthPending, user, isAuthModalOpen]);
+
+  const handleNavigate = (view: string, data?: any) => {
+    if (view === 'traveler-dashboard' && data?.tab) {
+      const tab = data.tab;
+      if (tab === 'bookings' || tab === 'favorites' || tab === 'profile') setDashboardTab(tab);
+    }
+    if (view === 'search') {
+      // Une navigation sans filtres réutilise la recherche ; avec filtres, on les fusionne.
+      if (data) setSearchFilters(previous => ({ ...previous, ...data }));
+    }
+    // Les accès sensibles doivent aussi être protégés par les pages et les règles RLS.
+    if (view === 'admin-dashboard' && role !== 'admin') {
+      if (!user) handleOpenAuth('signin');
+      return;
+    }
+    if (view === 'hotelier-dashboard' && role !== 'owner' && role !== 'admin') {
+      setCurrentView('become-host');
+      return;
+    }
+    if (view === 'traveler-dashboard' && !user) {
+      handleOpenAuth('signin');
+      return;
+    }
+    setCurrentView(view);
+  };
+
+  const handleSearchFromHome = (filters: Partial<SearchFilters>) => {
+    setSearchFilters({ ...DEFAULT_FILTERS, ...filters });
     setCurrentView('search');
   };
 
   const handleSelectRegionFromHome = (regionName: string) => {
-    setSearchFilters({ destination: regionName });
+    setSearchFilters({ ...DEFAULT_FILTERS, destination: regionName });
     setCurrentView('search');
   };
 
@@ -93,15 +114,50 @@ function MainApp() {
     setCurrentView('hotel-detail');
   };
 
-  const handleProceedToBooking = (payload: any) => {
+  const handleProceedToBooking = (payload: BookingPayload) => {
     setBookingPayload(payload);
     setCurrentView('booking-tunnel');
   };
 
+  const handleStartHostJourney = () => {
+    if (!user) {
+      setHostAuthPending(true);
+      handleOpenAuth('signup');
+      return;
+    }
+    setHostAuthPending(false);
+    setCurrentView('host-terms');
+  };
+
+  const handleAcceptHostTerms = () => {
+    if (!user) {
+      setHostAuthPending(true);
+      handleOpenAuth('signin');
+      return;
+    }
+    setHostOnboardingMode('first-host');
+    setCurrentView('host-onboarding');
+  };
+
+  const handleAddLodging = () => {
+    if (!user || (role !== 'owner' && role !== 'admin')) {
+      handleNavigate('become-host');
+      return;
+    }
+    setHostOnboardingMode('add-lodging');
+    setCurrentView('host-onboarding');
+  };
+
+  const handleCompleteHostOnboarding = (data: HostOnboardingData) => {
+    setPendingHostOnboarding(data);
+    // Sans persistance ni activation réelle du rôle hôte, ne pas afficher
+    // un tableau de bord comme si l'hébergement avait été enregistré.
+    // L'utilisateur revient à la page de présentation du parcours hôte.
+    setCurrentView(role === 'owner' || role === 'admin' ? 'hotelier-dashboard' : 'become-host');
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF9F6] text-[#2D2A26] font-sans antialiased selection:bg-[#3F6212] selection:text-white">
-      
-      {/* Global Navigation Bar */}
+    <div className="flex min-h-screen flex-col bg-[#F7F5EF] font-sans text-[#30352F] antialiased selection:bg-[#284C3B] selection:text-white">
       <Navbar
         currentView={currentView}
         onNavigate={handleNavigate}
@@ -109,8 +165,7 @@ function MainApp() {
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
       />
 
-      {/* Main View Router */}
-      <main className="flex-1">
+      <main id="main-content" className="min-w-0 flex-1">
         {currentView === 'home' && (
           <HomePage
             onSearch={handleSearchFromHome}
@@ -167,15 +222,43 @@ function MainApp() {
 
         {currentView === 'traveler-dashboard' && (
           <TravelerDashboardPage
+            key={`traveler-${dashboardTab}`}
             initialTab={dashboardTab}
             onSelectHotel={handleSelectHotel}
             onOpenAuth={() => handleOpenAuth('signin')}
           />
         )}
 
+        {currentView === 'become-host' && (
+          <BecomeHostPage
+            isAuthenticated={Boolean(user)}
+            onStart={handleStartHostJourney}
+            onSignIn={() => {
+              setHostAuthPending(true);
+              handleOpenAuth('signin');
+            }}
+          />
+        )}
+
+        {currentView === 'host-terms' && (
+          <HostTermsPage
+            onBack={() => setCurrentView('become-host')}
+            onContinue={handleAcceptHostTerms}
+          />
+        )}
+
+        {currentView === 'host-onboarding' && (
+          <HostOnboardingPage
+            mode={hostOnboardingMode}
+            onBack={() => setCurrentView(hostOnboardingMode === 'add-lodging' ? 'hotelier-dashboard' : 'host-terms')}
+            onComplete={handleCompleteHostOnboarding}
+          />
+        )}
+
         {currentView === 'hotelier-dashboard' && (
           <HotelierDashboardPage
-            onOpenAuth={() => handleOpenAuth('signin', 'owner')}
+            onAddLodging={handleAddLodging}
+            onOpenAuth={() => handleOpenAuth('signin')}
             onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
           />
         )}
@@ -188,26 +271,26 @@ function MainApp() {
         )}
       </main>
 
-      {/* Global Footer */}
       <Footer
         onSelectRegion={handleSelectRegionFromHome}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
       />
 
-      {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => {
+          setIsAuthModalOpen(false);
+          // Si l'utilisateur ferme sans se connecter, annuler la reprise hôte.
+          if (!user) setHostAuthPending(false);
+        }}
         initialMode={authModalMode}
         initialRole={authModalRole}
       />
 
-      {/* Supabase Schema and Helper Modal */}
       <SupabaseSetupModal
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
       />
-
     </div>
   );
 }

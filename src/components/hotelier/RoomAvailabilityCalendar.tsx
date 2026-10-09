@@ -1,21 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Calendar as CalendarIcon, 
-  ChevronLeft, 
-  ChevronRight, 
-  ShieldAlert, 
-  CheckCircle2, 
-  Tag, 
-  Lock, 
-  Unlock, 
-  Sparkles, 
-  AlertCircle, 
-  Loader2, 
-  RefreshCw, 
-  Layers, 
-  Info,
+  Calendar as CalendarIcon,
+  CheckCircle2,
+  Lock,
+  Unlock,
+  Sparkles,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
   CalendarCheck,
-  TrendingUp,
   X
 } from 'lucide-react';
 import { RoomType, RoomAvailability } from '@/src/types';
@@ -33,6 +26,33 @@ interface RoomAvailabilityCalendarProps {
   onRoomSelect?: (roomId: string) => void;
 }
 
+const CALENDAR_START_YEAR = 2026;
+const CALENDAR_END_YEAR = 2035;
+
+const MONTHS = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
+];
+
+const toDateString = (year: number, month: number, day: number) => {
+  const d = new Date(year, month, day);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-');
+};
+
 export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> = ({
   rooms,
   selectedRoomId: initialRoomId,
@@ -49,6 +69,13 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
     const d = new Date();
     d.setDate(1);
     return d;
+  });
+
+  // Sélection guidée : année → mois → jour.
+  // 2026 est volontairement la première année proposée.
+  const [selectedDay, setSelectedDay] = useState<number>(() => {
+    const d = new Date();
+    return d.getDate();
   });
 
   const [availabilityList, setAvailabilityList] = useState<RoomAvailability[]>([]);
@@ -106,19 +133,42 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
     loadMonthAvailability();
   }, [activeRoom?.id, currentDate]);
 
-  // Quick navigation
-  const handlePrevMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  // Navigation guidée : année → mois → jour.
+  const handleYearChange = (yearValue: number) => {
+    const nextYear = Math.max(CALENDAR_START_YEAR, Math.min(CALENDAR_END_YEAR, yearValue));
+    const maxDay = new Date(nextYear, currentDate.getMonth() + 1, 0).getDate();
+    const nextDay = Math.min(selectedDay, maxDay);
+
+    setCurrentDate(new Date(nextYear, currentDate.getMonth(), 1));
+    setSelectedDay(nextDay);
+    handleClearSelection();
   };
 
-  const handleNextMonth = () => {
-    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  const handleMonthChange = (monthValue: number) => {
+    const maxDay = new Date(currentDate.getFullYear(), monthValue + 1, 0).getDate();
+    const nextDay = Math.min(selectedDay, maxDay);
+
+    setCurrentDate(new Date(currentDate.getFullYear(), monthValue, 1));
+    setSelectedDay(nextDay);
+    handleClearSelection();
+  };
+
+  const handleDayChange = (dayValue: number) => {
+    const maxDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const nextDay = Math.max(1, Math.min(maxDay, dayValue));
+
+    setSelectedDay(nextDay);
+    handleDateClick(toDateString(currentDate.getFullYear(), currentDate.getMonth(), nextDay));
   };
 
   const handleTodayMonth = () => {
     const d = new Date();
-    d.setDate(1);
-    setCurrentDate(d);
+    const year = Math.max(CALENDAR_START_YEAR, Math.min(CALENDAR_END_YEAR, d.getFullYear()));
+    const maxDay = new Date(year, d.getMonth() + 1, 0).getDate();
+
+    setCurrentDate(new Date(year, d.getMonth(), 1));
+    setSelectedDay(Math.min(d.getDate(), maxDay));
+    handleClearSelection();
   };
 
   // Seed / Initialize 365 Days
@@ -158,6 +208,11 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
   // Date selection click handler
   const handleDateClick = (dateStr: string) => {
+    const clickedDate = new Date(`${dateStr}T00:00:00`);
+    if (!Number.isNaN(clickedDate.getTime())) {
+      setSelectedDay(clickedDate.getDate());
+    }
+
     if (!rangeStart || (rangeStart && rangeEnd)) {
       // Start new selection
       setRangeStart(dateStr);
@@ -408,7 +463,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
       {/* Header & Room Selector */}
       <div className="bg-white p-6 rounded-3xl border border-[#E6E2D3] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span className="text-xs text-[#8B5E34] font-bold uppercase tracking-wider block">Back-office Hôtelier</span>
+          <span className="text-xs text-[#8B5E34] font-bold uppercase tracking-wider block">Back-office Gestionnaire</span>
           <h3 className="text-lg font-serif font-bold text-[#2D2A26] flex items-center gap-2">
             <CalendarCheck size={20} className="text-[#3F6212]" />
             <span>Gestion des Disponibilités & Tarifs Saisonniers</span>
@@ -501,31 +556,18 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
         {/* LEFT: Interactive Month Grid */}
         <div className="lg:col-span-8 bg-white p-6 rounded-3xl border border-[#E6E2D3] shadow-xs space-y-4">
           
-          {/* Month Header Nav */}
-          <div className="flex items-center justify-between pb-3 border-b border-[#E6E2D3]">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handlePrevMonth}
-                className="p-2 hover:bg-[#FAF9F6] border border-[#E6E2D3] rounded-xl text-[#2D2A26] cursor-pointer transition"
-                title="Mois précédent"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={handleNextMonth}
-                className="p-2 hover:bg-[#FAF9F6] border border-[#E6E2D3] rounded-xl text-[#2D2A26] cursor-pointer transition"
-                title="Mois suivant"
-              >
-                <ChevronRight size={16} />
-              </button>
-              <h4 className="font-serif font-bold text-base text-[#2D2A26] capitalize ml-2">
-                {monthName}
-              </h4>
-            </div>
+          {/* Sélection guidée : année → mois → jour */}
+          <div className="pb-4 border-b border-[#E6E2D3] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h4 className="font-serif font-bold text-base text-[#2D2A26]">
+                  Choisir une date
+                </h4>
+                <p className="text-[11px] text-[#6B6658] mt-0.5">
+                  Sélectionnez d'abord l'année, puis le mois, puis le jour.
+                </p>
+              </div>
 
-            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleTodayMonth}
@@ -533,6 +575,83 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
               >
                 Aujourd'hui
               </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label
+                  htmlFor="calendar-year"
+                  className="block text-[10px] font-bold uppercase tracking-wide text-[#6B6658] mb-1"
+                >
+                  1. Année
+                </label>
+                <select
+                  id="calendar-year"
+                  value={year}
+                  onChange={(e) => handleYearChange(Number(e.target.value))}
+                  className="w-full bg-[#FAF9F6] border border-[#E6E2D3] rounded-xl px-3 py-2.5 text-xs font-bold text-[#2D2A26] outline-none focus:border-[#3F6212] cursor-pointer"
+                >
+                  {Array.from(
+                    { length: CALENDAR_END_YEAR - CALENDAR_START_YEAR + 1 },
+                    (_, index) => CALENDAR_START_YEAR + index
+                  ).map((yearOption) => (
+                    <option key={yearOption} value={yearOption}>
+                      {yearOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="calendar-month"
+                  className="block text-[10px] font-bold uppercase tracking-wide text-[#6B6658] mb-1"
+                >
+                  2. Mois
+                </label>
+                <select
+                  id="calendar-month"
+                  value={month}
+                  onChange={(e) => handleMonthChange(Number(e.target.value))}
+                  className="w-full bg-[#FAF9F6] border border-[#E6E2D3] rounded-xl px-3 py-2.5 text-xs font-bold text-[#2D2A26] outline-none focus:border-[#3F6212] cursor-pointer"
+                >
+                  {MONTHS.map((monthNameOption, index) => (
+                    <option key={monthNameOption} value={index}>
+                      {monthNameOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="calendar-day"
+                  className="block text-[10px] font-bold uppercase tracking-wide text-[#6B6658] mb-1"
+                >
+                  3. Jour
+                </label>
+                <select
+                  id="calendar-day"
+                  value={Math.min(selectedDay, daysInMonth)}
+                  onChange={(e) => handleDayChange(Number(e.target.value))}
+                  className="w-full bg-[#FAF9F6] border border-[#E6E2D3] rounded-xl px-3 py-2.5 text-xs font-bold text-[#2D2A26] outline-none focus:border-[#3F6212] cursor-pointer"
+                >
+                  {Array.from({ length: daysInMonth }, (_, index) => index + 1).map((dayOption) => (
+                    <option key={dayOption} value={dayOption}>
+                      {dayOption}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] text-[#6B6658]">
+              <CalendarIcon size={13} className="text-[#3F6212]" />
+              <span className="font-bold text-[#2D2A26]">
+                {monthName}
+              </span>
+              <span>•</span>
+              <span>{daysInMonth} jours dans ce mois</span>
             </div>
           </div>
 
