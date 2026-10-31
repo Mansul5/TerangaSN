@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -12,6 +13,7 @@ import {
   supabase,
   isSupabaseConfigured,
 } from '@/src/lib/supabase/client';
+import { TERMS_VERSION } from '@/src/lib/legal';
 
 import { Profile, UserRole } from '@/src/types';
 
@@ -24,6 +26,10 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   role: UserRole;
+  hasHostAccess: boolean;
+  hasAdminStaffAccess: boolean;
+  adminStaffPermissions: string[];
+  adminStaffPresence: 'online' | 'away';
 
   isLoading: boolean;
   isConfigured: boolean;
@@ -43,7 +49,8 @@ interface AuthContextType {
     email: string,
     password: string,
     fullName: string,
-    phone?: string
+    phone: string | undefined,
+    acceptedTerms: boolean
   ) => Promise<AuthResult>;
 
   signOut: () => Promise<AuthResult>;
@@ -53,6 +60,7 @@ interface AuthContextType {
   ) => Promise<AuthResult>;
 
   refreshProfile: () => Promise<void>;
+  setAdminStaffPresence: (preference: 'online' | 'away') => Promise<AuthResult>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(
@@ -65,6 +73,11 @@ export const AuthProvider: React.FC<{
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [hasHostAccess, setHasHostAccess] = useState(false);
+  const [hasAdminStaffAccess, setHasAdminStaffAccess] = useState(false);
+  const [adminStaffPermissions, setAdminStaffPermissions] = useState<string[]>([]);
+  const [adminStaffPresence, setAdminStaffPresenceState] = useState<'online' | 'away'>('online');
+  const adminStaffPresenceRef = useRef<'online' | 'away'>('online');
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -103,121 +116,219 @@ export const AuthProvider: React.FC<{
     []
   );
 
+  // L'habilitation hôte est distincte du rôle administratif.
+  // Une ligne d'abonnement atteste de l'activation, même si l'abonnement
+  // n'est plus actif : les restrictions commerciales sont gérées ailleurs.
+  const fetchHostAccess = useCallback(async (userId: string): Promise<boolean> => {
+    if (!isSupabaseConfigured) return false;
+    try {
+      const { data, error } = await supabase
+        .from('owner_subscriptions')
+        .select('owner_id')
+        .eq('owner_id', userId)
+        .limit(1);
+      if (error) {
+        console.warn('Impossible de vérifier l’activation hôte :', error.message);
+        return false;
+      }
+      return Boolean(data?.length);
+    } catch (error) {
+      console.warn('Impossible de vérifier l’activation hôte :', error);
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+
+    const clearStaffAccess = () => {
+      setHasAdminStaffAccess(false);
+      setAdminStaffPermissions([]);
+      setAdminStaffPresenceState('online');
+      adminStaffPresenceRef.current = 'online';
+    };
+
+    if (!user || !isSupabaseConfigured) {
+      clearStaffAccess();
+      return () => { active = false; };
+    }
+
+    const initializeStaffAccess = async () => {
+      try {
+        const { error: claimError } = await supabase.rpc('claim_admin_staff_invite');
+        if (claimError) throw claimError;
+        const { data, error } = await supabase.rpc('get_my_admin_staff_access');
+        if (error) throw error;
+        if (!active) return;
+
+        const permissions = Array.isArray(data?.permissions)
+          ? data.permissions.filter((permission: unknown): permission is string => typeof permission === 'string')
+          : [];
+        const isActiveStaff = data?.account_status === 'active';
+        const preference = data?.presence_preference === 'away' ? 'away' : 'online';
+        setHasAdminStaffAccess(isActiveStaff);
+        setAdminStaffPermissions(isActiveStaff ? permissions : []);
+        if (isActiveStaff) {
+          setAdminStaffPresenceState(preference);
+          adminStaffPresenceRef.current = preference;
+          const { error: presenceError } = await supabase.rpc('update_admin_staff_presence', {
+            p_preference: preference,
+          });
+          if (presenceError) console.warn('Impossible de mettre à jour la présence équipe :', presenceError.message);
+          if (!active) return;
+          heartbeat = setInterval(() => {
+            void supabase.rpc('update_admin_staff_presence', { p_preference: adminStaffPresenceRef.current })
+              .then(({ error: presenceUpdateError }) => {
+                if (presenceUpdateError) console.warn('Heartbeat équipe impossible :', presenceUpdateError.message);
+              });
+          }, 60_000);
+        }
+      } catch (error) {
+        if (!active) return;
+        clearStaffAccess();
+        console.warn('Impossible de vérifier les accès équipe :', error);
+      }
+    };
+
+    void initializeStaffAccess();
+    return () => {
+      active = false;
+      if (heartbeat) clearInterval(heartbeat);
+    };
+  }, [user?.id]);
+
+  const setAdminStaffPresence = useCallback(async (preference: 'online' | 'away'): Promise<AuthResult> => {
+    if (!user || !hasAdminStaffAccess) return { error: new Error('Accès collaborateur requis.') };
+    const { error } = await supabase.rpc('update_admin_staff_presence', { p_preference: preference });
+    if (error) return { error };
+    adminStaffPresenceRef.current = preference;
+    setAdminStaffPresenceState(preference);
+    return { error: null };
+  }, [user, hasAdminStaffAccess]);
+
   /**
    * Recharge le profil de l'utilisateur connecté.
    */
   const refreshProfile = useCallback(async () => {
     if (!user) {
       setProfile(null);
+      setHasHostAccess(false);
       return;
     }
 
-    const refreshedProfile = await fetchProfile(user.id);
-
+    const [refreshedProfile, refreshedHostAccess] = await Promise.all([
+      fetchProfile(user.id), fetchHostAccess(user.id),
+    ]);
     setProfile(refreshedProfile);
-  }, [user, fetchProfile]);
+    setHasHostAccess(refreshedHostAccess);
+  }, [user, fetchProfile, fetchHostAccess]);
 
-  /**
-   * Initialise la session et écoute ensuite
-   * les changements d'authentification Supabase.
-   */
+  // Les événements SIGNED_IN peuvent être émis quand un onglet reprend le focus.
+  // Un renouvellement de token ne doit pas réinitialiser les droits ni l'interface.
+  const currentUserIdRef = useRef<string | null>(null);
+  const authGenerationRef = useRef(0);
+
   useEffect(() => {
     let mounted = true;
+    let startupComplete = false;
+    let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const loadProfileForSession = async (
-      currentSession: Session | null
-    ) => {
+    const applySession = async (nextSession: Session | null, force = false) => {
       if (!mounted) return;
+      const nextId = nextSession?.user?.id ?? null;
+      const previousId = currentUserIdRef.current;
+      const identityChanged = previousId !== nextId;
+      const generation = ++authGenerationRef.current;
 
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
+      // Ne pas invalider le profil / rôle lors d'un simple renouvellement de session.
+      setSession(nextSession);
+      if (!identityChanged && !force) return;
 
-      if (!currentSession?.user) {
+      currentUserIdRef.current = nextId;
+      setUser(nextSession?.user ?? null);
+      if (!nextId) {
         setProfile(null);
+        setHasHostAccess(false);
+        setHasAdminStaffAccess(false);
+        setAdminStaffPermissions([]);
         return;
       }
 
-      const userProfile = await fetchProfile(
-        currentSession.user.id
-      );
+      if (identityChanged) {
+        // Changement réel de compte : les droits de l'ancien compte ne doivent pas survivre.
+        setProfile(null);
+        setHasHostAccess(false);
+        setHasAdminStaffAccess(false);
+        setAdminStaffPermissions([]);
+      }
 
+      const [freshProfile, freshHostAccess] = await Promise.all([
+        fetchProfile(nextId),
+        fetchHostAccess(nextId),
+      ]);
+      if (!mounted || authGenerationRef.current !== generation) return;
+
+      // Une panne réseau ponctuelle lors d'une reprise d'onglet ne doit pas effacer
+      // un profil valide. Un changement de compte a déjà vidé l'ancien profil.
+      if (freshProfile) setProfile(freshProfile);
+      setHasHostAccess(freshHostAccess);
+    };
+
+    const finishStartup = () => {
       if (!mounted) return;
-
-      setProfile(userProfile);
+      startupComplete = true;
+      setIsLoading(false);
     };
 
-    const initAuth = async () => {
+    const initialize = async () => {
+      if (!isSupabaseConfigured) {
+        await applySession(null);
+        finishStartup();
+        return;
+      }
       try {
-        if (!isSupabaseConfigured) {
-          if (mounted) {
-            setUser(null);
-            setSession(null);
-            setProfile(null);
-          }
-
-          return;
-        }
-
-        const {
-          data: { session: initialSession },
-          error,
-        } = await supabase.auth.getSession();
-
-        if (error) {
-          console.warn(
-            'Supabase session initialization warning:',
-            error.message
-          );
-        }
-
-        await loadProfileForSession(initialSession);
+        const { data, error } = await supabase.auth.getSession();
+        if (error) console.warn('Initialisation de session Supabase :', error.message);
+        await applySession(data.session);
       } catch (error) {
-        console.error(
-          'Supabase auth initialization error:',
-          error
-        );
-
-        if (mounted) {
-          setUser(null);
-          setSession(null);
-          setProfile(null);
-        }
+        // Ne pas déconnecter l'utilisateur à cause d'une erreur réseau temporaire.
+        console.warn('Session Supabase temporairement indisponible :', error);
       } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
+        finishStartup();
       }
     };
 
-    void initAuth();
-
-    if (!isSupabaseConfigured) {
-      return () => {
-        mounted = false;
-      };
-    }
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
-        if (!mounted) return;
-
-        try {
-          await loadProfileForSession(newSession);
-        } finally {
-          if (mounted) {
-            setIsLoading(false);
+    // Supabase conseille de ne pas effectuer de requêtes Supabase awaitées
+    // directement dans onAuthStateChange (risque de blocage du verrou auth).
+    // L'écouteur reste synchrone ; les lectures de profil sont différées.
+    const subscription = isSupabaseConfigured
+      ? supabase.auth.onAuthStateChange((event, nextSession) => {
+          if (!mounted) return;
+          if (event === 'TOKEN_REFRESHED') {
+            setSession(nextSession);
+            return;
           }
-        }
-      }
-    );
+          if (event === 'INITIAL_SESSION' && !startupComplete) return;
+          if (pendingTimer !== null) clearTimeout(pendingTimer);
+          pendingTimer = setTimeout(() => {
+            pendingTimer = null;
+            if (!mounted) return;
+            void applySession(nextSession).catch(error => {
+              console.warn('Synchronisation de session :', error);
+            });
+          }, 0);
+        }).data.subscription
+      : null;
 
+    void initialize();
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      authGenerationRef.current += 1;
+      if (pendingTimer !== null) clearTimeout(pendingTimer);
+      subscription?.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [fetchProfile, fetchHostAccess]);
 
   /**
    * Connexion par e-mail + mot de passe.
@@ -249,15 +360,21 @@ export const AuthProvider: React.FC<{
         return { error };
       }
 
+      currentUserIdRef.current = data.user?.id ?? null;
       setSession(data.session ?? null);
       setUser(data.user ?? null);
 
       if (data.user) {
-        const userProfile = await fetchProfile(data.user.id);
-
+        const [userProfile, hostAccess] = await Promise.all([
+          fetchProfile(data.user.id), fetchHostAccess(data.user.id),
+        ]);
         setProfile(userProfile);
+        setHasHostAccess(hostAccess);
       } else {
         setProfile(null);
+        setHasHostAccess(false);
+        setHasAdminStaffAccess(false);
+        setAdminStaffPermissions([]);
       }
 
       return { error: null };
@@ -288,8 +405,13 @@ export const AuthProvider: React.FC<{
     email: string,
     password: string,
     fullName: string,
-    phone: string = ''
+    phone: string | undefined,
+    acceptedTerms: boolean
   ): Promise<AuthResult> => {
+    if (!acceptedTerms) {
+      return { error: new Error('Vous devez accepter les conditions d’utilisation pour créer un compte.') };
+    }
+
     if (!isSupabaseConfigured) {
       return {
         error: new Error(
@@ -303,7 +425,7 @@ export const AuthProvider: React.FC<{
 
       const cleanEmail = email.trim().toLowerCase();
       const cleanFullName = fullName.trim();
-      const cleanPhone = phone.trim();
+      const cleanPhone = phone?.trim() ?? '';
 
       const accountRole: UserRole = 'traveler';
 
@@ -316,6 +438,8 @@ export const AuthProvider: React.FC<{
             full_name: cleanFullName,
             phone: cleanPhone || null,
             role: accountRole,
+            terms_accepted_at: new Date().toISOString(),
+            terms_version: TERMS_VERSION,
           },
         },
       });
@@ -379,6 +503,7 @@ export const AuthProvider: React.FC<{
       };
 
       setProfile(savedProfile ?? fallbackProfile);
+      setHasHostAccess(data.session ? await fetchHostAccess(data.user.id) : false);
 
       /**
        * Si la confirmation e-mail est désactivée dans Supabase,
@@ -389,6 +514,7 @@ export const AuthProvider: React.FC<{
        * avant d'obtenir une session.
        */
       if (data.session) {
+        currentUserIdRef.current = data.user.id;
         setSession(data.session);
         setUser(data.user);
       }
@@ -413,9 +539,13 @@ export const AuthProvider: React.FC<{
    */
   const signOut = async (): Promise<AuthResult> => {
     if (!isSupabaseConfigured) {
+      currentUserIdRef.current = null;
       setUser(null);
       setSession(null);
       setProfile(null);
+      setHasHostAccess(false);
+      setHasAdminStaffAccess(false);
+      setAdminStaffPermissions([]);
 
       return { error: null };
     }
@@ -429,9 +559,11 @@ export const AuthProvider: React.FC<{
         return { error };
       }
 
+      currentUserIdRef.current = null;
       setUser(null);
       setSession(null);
       setProfile(null);
+      setHasHostAccess(false);
 
       return { error: null };
     } catch (err: any) {
@@ -531,6 +663,10 @@ export const AuthProvider: React.FC<{
         session,
         profile,
         role,
+        hasHostAccess,
+        hasAdminStaffAccess,
+        adminStaffPermissions,
+        adminStaffPresence,
 
         isLoading,
         isConfigured: isSupabaseConfigured,
@@ -540,6 +676,7 @@ export const AuthProvider: React.FC<{
         signOut,
         updateProfile,
         refreshProfile,
+        setAdminStaffPresence,
       }}
     >
       {children}

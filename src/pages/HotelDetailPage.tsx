@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
 
-
-
 import {
 
   MapPin,
@@ -30,11 +28,7 @@ import {
 
 } from 'lucide-react';
 
-
-
 import { Lodging, RoomType, Review } from '@/src/types';
-
-
 
 import {
 
@@ -54,14 +48,11 @@ import {
 
 } from '@/src/lib/supabase/api';
 
-
-
 import {
 
   formatFCFA,
 
   formatDistance,
-
 
   getCategoryLabel,
 
@@ -69,25 +60,17 @@ import {
 
 } from '@/src/lib/formatters';
 
-
-
 import { BadgeEquipement } from '@/src/components/BadgeEquipement';
 
 import { RoomCard } from '@/src/components/RoomCard';
 
 import { ReviewCard } from '@/src/components/ReviewCard';
 
-
-
 import { useAuth } from '@/src/context/AuthContext';
-
-
 
 interface HotelDetailPageProps {
 
   hotelId: string;
-
-
 
   searchParams?: {
 
@@ -103,11 +86,7 @@ interface HotelDetailPageProps {
 
   };
 
-
-
   onBack: () => void;
-
-
 
   onProceedToBooking: (bookingPayload: {
 
@@ -131,13 +110,9 @@ interface HotelDetailPageProps {
 
   }) => void;
 
-
-
   onAuthRequired: () => void;
 
 }
-
-
 
 const getDateString = (date: Date): string => {
 
@@ -147,8 +122,6 @@ const getDateString = (date: Date): string => {
   return `${year}-${month}-${day}`;
 
 };
-
-
 
 const getTomorrowDate = (): string => {
 
@@ -160,8 +133,6 @@ const getTomorrowDate = (): string => {
 
 };
 
-
-
 const getDefaultCheckOutDate = (): string => {
 
   const date = new Date();
@@ -171,8 +142,6 @@ const getDefaultCheckOutDate = (): string => {
   return getDateString(date);
 
 };
-
-
 
 export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
@@ -190,8 +159,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   const { user } = useAuth();
 
-
-
   const [hotel, setHotel] = useState<Lodging | null>(null);
 
   const [rooms, setRooms] = useState<RoomType[]>([]);
@@ -199,15 +166,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoaded, setReviewsLoaded] = useState(false);
 
-
-
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [selectedRoom, setSelectedRoom] = useState<RoomType | null>(null);
-
-
 
   const [checkIn, setCheckIn] = useState<string>(
 
@@ -215,15 +178,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   );
 
-
-
   const [checkOut, setCheckOut] = useState<string>(
 
     searchParams?.checkOut || getDefaultCheckOutDate()
 
   );
-
-
 
   const [adults, setAdults] = useState<number>(
 
@@ -231,15 +190,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   );
 
-
-
   const [children, setChildren] = useState<number>(
 
     searchParams?.children || 0
 
   );
-
-
 
   const [roomsCount, setRoomsCount] = useState<number>(
 
@@ -257,17 +212,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
     useState<boolean>(false);
 
-
-
   const [reviewRating, setReviewRating] = useState<number>(5);
-
-
 
   const [reviewComment, setReviewComment] =
 
     useState<string>('');
-
-
 
   const [reviewGuestName, setReviewGuestName] =
 
@@ -277,13 +226,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
     );
 
-
-
   const [reviewSubmitting, setReviewSubmitting] =
 
     useState<boolean>(false);
-
-
 
   const [reviewSuccess, setReviewSuccess] =
 
@@ -312,8 +257,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
     >
 
   >({});
-
-
 
   const nightsCount = calculateNights(
 
@@ -357,11 +300,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
     }
 
-
-
     let isMounted = true;
-
-
 
     const loadPricingAndAvailability =
 
@@ -387,8 +326,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
         > = {};
 
-
-
         for (const room of rooms) {
 
           try {
@@ -413,8 +350,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               ),
 
-
-
               checkRoomAvailabilityRPC(
 
                 room.id,
@@ -429,15 +364,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
             ]);
 
-
-
-            
-
             const isAvail =
 
               availabilityResult.isAvailable;
-
-
 
             results[room.id] = {
 
@@ -461,8 +390,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
           } catch {
 
-            
-
             results[room.id] = {
 
               totalPrice:
@@ -473,21 +400,13 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                 roomsCount,
 
-
-
               averageNightlyPrice:
 
                 room.price_per_night,
 
-
-
               hasSpecialRates: false,
 
-
-
               isAvailable: false,
-
-
 
               minAvailable: 0,
 
@@ -497,8 +416,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
         }
 
-
-
         if (isMounted) {
 
           setRoomPricingMap(results);
@@ -507,11 +424,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       };
 
-
-
     loadPricingAndAvailability();
-
-
 
     return () => {
 
@@ -536,8 +449,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
   useEffect(() => {
 
     let isMounted = true;
-
-
 
     const loadHotelDetails = async () => {
 
@@ -572,11 +483,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
         ]);
 
-
-
         if (!isMounted) return;
-
-
 
         if (
 
@@ -592,8 +499,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
           setReviews([]);
 
-
-
           setErrorMsg(
 
             'Impossible de charger les détails de ce logement.'
@@ -605,23 +510,17 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
           setHotel(hotelRes.data);
           setReviewsLoaded(!reviewsRes.error);
 
-
-
           setRooms(
 
             roomsRes.data || []
 
           );
 
-
-
           setReviews(
 
             reviewsRes.data || []
 
           );
-
-
 
           if (
 
@@ -645,15 +544,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
         if (!isMounted) return;
 
-
-
         setHotel(null);
 
         setRooms([]);
 
         setReviews([]);
-
-
 
         setErrorMsg(
 
@@ -675,11 +570,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
     };
 
-
-
     loadHotelDetails();
-
-
 
     window.scrollTo({
 
@@ -689,8 +580,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
     });
 
-
-
     return () => {
 
       isMounted = false;
@@ -698,8 +587,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
     };
 
   }, [hotelId]);
-
-
 
   const handleFavoriteToggle = async () => {
 
@@ -710,8 +597,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
       return;
 
     }
-
-
 
     try {
 
@@ -724,8 +609,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
           hotelId
 
         );
-
-
 
       setIsFavorite(updated);
 
@@ -743,8 +626,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   };
 
-
-
   const handleShare = async () => {
 
     try {
@@ -755,11 +636,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       );
 
-
-
       setCopiedLink(true);
-
-
 
       setTimeout(() => {
 
@@ -779,8 +656,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   };
 
-
-
   const handleReviewSubmit = async (
 
     e: React.FormEvent
@@ -788,8 +663,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
   ) => {
 
     e.preventDefault();
-
-
 
     if (!user) {
 
@@ -799,21 +672,15 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
     }
 
-
-
     if (!reviewComment.trim()) {
 
       return;
 
     }
 
-
-
     try {
 
       setReviewSubmitting(true);
-
-
 
       const { error } =
 
@@ -837,21 +704,15 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
         });
 
-
-
       if (error) {
 
         throw error;
 
       }
 
-
-
       setReviewSuccess(true);
 
       setReviewComment('');
-
-
 
       setTimeout(() => {
 
@@ -879,8 +740,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   };
 
-
-
   const handleCheckInChange = (
 
     value: string
@@ -888,10 +747,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
   ) => {
 
     setCheckIn(value);
-
-
-
-    
 
     if (!checkOut || value >= checkOut) {
 
@@ -901,15 +756,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       );
 
-
-
       nextDay.setDate(
 
         nextDay.getDate() + 1
 
       );
-
-
 
       setCheckOut(
 
@@ -920,8 +771,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
     }
 
   };
-
-
 
   const handleCheckOutChange = (
 
@@ -937,15 +786,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       );
 
-
-
       nextDay.setDate(
 
         nextDay.getDate() + 1
 
       );
-
-
 
       setCheckOut(
 
@@ -953,19 +798,13 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       );
 
-
-
       return;
 
     }
 
-
-
     setCheckOut(value);
 
   };
-
-
 
   const handleProceed = () => {
 
@@ -974,8 +813,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
       return;
 
     }
-
-
 
     if (
 
@@ -993,13 +830,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       );
 
-
-
       return;
 
     }
-
-
 
     const pricing =
 
@@ -1009,10 +842,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       ];
 
-
-
-    
-
     if (!pricing) {
 
       alert(
@@ -1021,13 +850,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       );
 
-
-
       return;
 
     }
-
-
 
     if (!pricing.isAvailable) {
 
@@ -1037,13 +862,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       );
 
-
-
       return;
 
     }
-
-
 
     const totalPrice =
 
@@ -1054,8 +875,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
         nightsCount *
 
         roomsCount;
-
-
 
     onProceedToBooking({
 
@@ -1081,25 +900,21 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   };
 
-
-
   if (isLoading) {
 
     return (
 
-      <div className="min-h-screen bg-[#F7F5EF] flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[#F8F7F3] flex items-center justify-center p-6">
 
         <div className="text-center space-y-3">
 
           <Loader2
 
-            className="animate-spin text-[#284C3B] mx-auto"
+            className="animate-spin text-[#193E30] mx-auto"
 
             size={36}
 
           />
-
-
 
           <p className="text-sm font-semibold text-[#666A61]">
 
@@ -1115,29 +930,23 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   }
 
-
-
   if (errorMsg || !hotel) {
 
     return (
 
-      <div className="min-h-screen bg-[#F7F5EF] py-16 px-4 max-w-2xl mx-auto text-center space-y-4">
+      <div className="min-h-screen bg-[#F8F7F3] py-16 px-4 max-w-2xl mx-auto text-center space-y-4">
 
-        <div className="w-16 h-16 bg-[#F1EDE4] text-[#997648] rounded-full flex items-center justify-center mx-auto">
+        <div className="w-16 h-16 bg-[#F1EDE4] text-[#9B7B4C] rounded-full flex items-center justify-center mx-auto">
 
           <AlertCircle size={32} />
 
         </div>
-
-
 
         <h2 className="text-2xl font-serif font-bold text-[#30352F]">
 
           Logement non trouvé
 
         </h2>
-
-
 
         <p className="text-sm text-[#666A61]">
 
@@ -1147,15 +956,13 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
         </p>
 
-
-
         <button
 
           type="button"
 
           onClick={onBack}
 
-          className="px-5 py-2.5 bg-[#284C3B] text-white rounded-xl font-bold text-xs hover:bg-[#1B382D] transition cursor-pointer"
+          className="px-5 py-2.5 bg-[#193E30] text-white rounded-xl font-bold text-xs hover:bg-[#193E30] transition cursor-pointer"
 
         >
 
@@ -1169,8 +976,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   }
 
-
-
   const photos =
 
     hotel.photos &&
@@ -1181,11 +986,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       : [
 
-          'https\://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80',
+          'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80',
 
         ];
-
-
 
   // Only published/approved reviews contribute to the public score.
   // Some API implementations already filter to approved reviews and omit status.
@@ -1229,8 +1032,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       : undefined;
 
-
-
   const selectedRoomTotal =
 
     selectedRoomPricing?.totalPrice ||
@@ -1245,15 +1046,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       : 0);
 
-
-
   return (
 
-    <div className="bg-[#F7F5EF] min-h-screen pb-24 overflow-x-clip">
+    <div className="bg-[#F8F7F3] min-h-screen pb-24 overflow-x-clip">
 
-      
-
-      <div className="bg-white border-b border-[#E9E2D5] sticky top-16 z-20 px-3 min-[360px]:px-4 sm:px-6 py-2.5 sm:py-3 shadow-xs">
+      <div className="bg-white/95 backdrop-blur-xl border-b border-[#EAE8E1] sticky top-[68px] z-20 px-3 min-[360px]:px-4 sm:px-6 py-2.5 sm:py-3 shadow-xs">
 
         <div className="max-w-7xl mx-auto flex min-w-0 items-center justify-between gap-2">
 
@@ -1263,13 +1060,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
             onClick={onBack}
 
-            className="flex min-w-0 items-center gap-1 text-[11px] min-[360px]:text-xs sm:text-sm font-bold text-[#30352F] hover:text-[#284C3B] transition cursor-pointer"
+            className="flex min-w-0 items-center gap-1 text-[11px] min-[360px]:text-xs sm:text-sm font-bold text-[#30352F] hover:text-[#193E30] transition cursor-pointer"
 
           >
 
             <ChevronLeft size={18} />
-
-
 
             <span className="truncate">
 
@@ -1280,8 +1075,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
             </span>
 
           </button>
-
-
 
           <div className="flex shrink-0 items-center gap-1 min-[360px]:gap-2">
 
@@ -1307,15 +1100,13 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   isFavorite
 
-                    ? 'fill-[#997648] text-[#997648]'
+                    ? 'fill-[#9B7B4C] text-[#9B7B4C]'
 
                     : 'text-[#666A61]'
 
                 }
 
               />
-
-
 
               <span className="hidden min-[360px]:inline">
 
@@ -1328,8 +1119,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
               </span>
 
             </button>
-
-
 
             <button
 
@@ -1349,8 +1138,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               />
 
-
-
               <span className="hidden min-[360px]:inline">
 
                 {copiedLink
@@ -1362,8 +1149,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
               </span>
 
             </button>
-
-
 
             <button
 
@@ -1379,8 +1164,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   );
 
-
-
                 el?.scrollIntoView({
 
                   behavior: 'smooth',
@@ -1389,7 +1172,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               }}
 
-              className="bg-[#284C3B] hover:bg-[#1B382D] text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow-xs hidden sm:block cursor-pointer"
+              className="bg-[#193E30] hover:bg-[#193E30] text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow-xs hidden sm:block cursor-pointer"
 
             >
 
@@ -1403,17 +1186,13 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
       </div>
 
-
-
-      <div className="max-w-7xl mx-auto px-3 min-[360px]:px-4 sm:px-6 pt-5 sm:pt-6 space-y-6 sm:space-y-8">
-
-        
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 sm:pt-11 space-y-8 sm:space-y-12">
 
         <div>
 
           <div className="flex flex-wrap items-center gap-2 mb-2">
 
-            <span className="bg-[#E8F0E9] text-[#284C3B] text-xs font-bold px-2.5 py-0.5 rounded-md uppercase border border-[#D4E0D7]">
+            <span className="bg-[#ECF2ED] text-[#193E30] text-xs font-bold px-2.5 py-0.5 rounded-md uppercase border border-[#D9E6DC]">
 
               {getCategoryLabel(
 
@@ -1423,15 +1202,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
             </span>
 
-
-
             <span className="text-xs text-[#777B73]">
 
               •
 
             </span>
-
-
 
             <span className="text-xs text-[#666A61] font-medium">
 
@@ -1443,19 +1218,15 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
           </div>
 
-
-
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
 
             <div>
 
-              <h1 className="text-2xl sm:text-4xl font-serif font-bold text-[#30352F] tracking-tight">
+              <h1 className="text-3xl sm:text-5xl lg:text-[58px] font-serif font-semibold leading-[1.08] text-[#193E30] tracking-tight">
 
                 {hotel.name}
 
               </h1>
-
-
 
               <p className="flex flex-wrap items-start gap-x-1.5 gap-y-1 text-xs sm:text-sm text-[#666A61] mt-1">
 
@@ -1463,11 +1234,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   size={15}
 
-                  className="text-[#997648] shrink-0"
+                  className="text-[#9B7B4C] shrink-0"
 
                 />
-
-
 
                 <span>
 
@@ -1475,13 +1244,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                 </span>
 
-
-
                 {hotel.distance_beach_m !==
 
                   null && (
 
-                  <span className="text-[#284C3B] font-semibold ml-2">
+                  <span className="text-[#193E30] font-semibold ml-2">
 
                     (
 
@@ -1501,13 +1268,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
             </div>
 
-
-
-            
-
                           <div className="flex items-center gap-3 rounded-2xl border border-[#E9E2D5] bg-white px-4 py-3 shadow-sm shrink-0">
                 <div className="flex flex-col items-end gap-1">
-                  <span className="text-xs font-bold text-[#284C3B]">
+                  <span className="text-xs font-bold text-[#193E30]">
                     {averageRating === null ? 'Nouvel établissement' : `${averageRating.toFixed(1)} / 5`}
                   </span>
                   <div className="flex gap-0.5" aria-label={averageRating === null ? 'Aucune note' : `Note moyenne ${averageRating.toFixed(1)} sur 5`}>
@@ -1519,7 +1282,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     {!reviewsLoaded ? 'Avis indisponibles' : `${ratedReviews.length} avis publié${ratedReviews.length > 1 ? 's' : ''}`}
                   </span>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-[#284C3B] text-white font-black text-lg flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-[#193E30] text-white font-black text-lg flex items-center justify-center">
                   {averageRating === null ? '—' : averageRating.toFixed(1)}
                 </div>
               </div>
@@ -1528,15 +1291,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
         </div>
 
-
-
-        
-
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:h-[480px]">
 
-          
-
-          <div className="lg:col-span-8 h-[230px] min-[360px]:h-[280px] sm:h-[380px] lg:h-full rounded-2xl overflow-hidden shadow-xs bg-[#30352F] relative">
+          <div className="lg:col-span-8 h-[270px] min-[360px]:h-[320px] sm:h-[440px] lg:h-full rounded-[26px] overflow-hidden shadow-[0_18px_45px_-25px_rgba(27,56,45,0.32)] bg-[#EDEBE5] relative">
 
             <img
 
@@ -1551,26 +1308,28 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
               }
 
               alt={hotel.name}
+              loading="eager"
+              decoding="async"
 
               className="w-full h-full object-cover"
 
             />
 
-
-
+            {photos.length > 1 && (
+              <div className="absolute right-4 bottom-4 flex items-center gap-2" aria-label="Navigation dans les photos">
+                <button type="button" aria-label="Photo précédente" onClick={() => setActivePhotoIdx((idx) => (idx - 1 + photos.length) % photos.length)} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-[#193E30]/85 text-white backdrop-blur-sm transition hover:bg-[#193E30] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><ChevronLeft size={19} /></button>
+                <button type="button" aria-label="Photo suivante" onClick={() => setActivePhotoIdx((idx) => (idx + 1) % photos.length)} className="grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-[#193E30]/85 text-white backdrop-blur-sm transition hover:bg-[#193E30] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><ChevronRight size={19} /></button>
+              </div>
+            )}
             <div className="absolute bottom-4 left-4 bg-[#30352F]/80 backdrop-blur-xs text-white text-xs px-3 py-1.5 rounded-lg font-semibold">
 
-              Photo {activePhotoIdx + 1}{' '}
+              {!hotel.photos?.length ? 'Image illustrative · ' : ''}Photo {activePhotoIdx + 1}{' '}
 
               sur {photos.length}
 
             </div>
 
           </div>
-
-
-
-          
 
           <div className="lg:col-span-4 flex gap-2.5 overflow-x-auto pb-1 lg:grid lg:grid-cols-1 lg:overflow-x-hidden lg:overflow-y-auto lg:pb-0">
 
@@ -1594,19 +1353,20 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   }
 
+                  aria-pressed={activePhotoIdx === idx}
                   aria-label={`Afficher la photo ${
 
                     idx + 1
 
                   }`}
 
-                  className={`h-20 w-28 shrink-0 min-[360px]:h-24 min-[360px]:w-36 lg:h-36 lg:w-auto rounded-xl overflow-hidden cursor-pointer transition-all border-2 ${
+                  className={`h-20 w-28 shrink-0 min-[360px]:h-24 min-[360px]:w-36 lg:h-36 lg:w-auto rounded-2xl overflow-hidden cursor-pointer transition-all border-2 ${
 
                     activePhotoIdx ===
 
                     idx
 
-                      ? 'border-[#284C3B] ring-2 ring-[#284C3B]/20'
+                      ? 'border-[#193E30] ring-2 ring-[#193E30]/20'
 
                       : 'border-transparent opacity-75 hover:opacity-100'
 
@@ -1619,6 +1379,8 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     src={imgUrl}
 
                     alt=""
+                    loading="lazy"
+                    decoding="async"
 
                     className="w-full h-full object-cover"
 
@@ -1634,35 +1396,23 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
         </div>
 
-
-
-        
-
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-          
+          <div className="lg:col-span-8 space-y-9">
 
-          <div className="lg:col-span-8 space-y-8">
+            <div className="bg-white p-6 sm:p-8 rounded-[26px] border border-[#EAE8E1] shadow-[0_12px_35px_-28px_rgba(27,56,45,0.24)] space-y-5">
 
-            
-
-            <div className="bg-white p-4 min-[360px]:p-5 sm:p-6 rounded-2xl border border-[#E9E2D5] shadow-xs space-y-4">
-
-              <h3 className="text-lg font-serif font-bold text-[#30352F]">
+              <h3 className="text-xl sm:text-2xl font-serif font-semibold text-[#193E30]">
 
                 À propos du logement
 
               </h3>
-
-
 
               <p className="text-sm text-[#30352F] leading-relaxed whitespace-pre-line">
 
                 {hotel.description}
 
               </p>
-
-
 
               <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 min-[360px]:gap-4 pt-4 border-t border-[#E9E2D5] text-xs">
 
@@ -1672,11 +1422,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                     size={16}
 
-                    className="text-[#284C3B] shrink-0"
+                    className="text-[#193E30] shrink-0"
 
                   />
-
-
 
                   <div>
 
@@ -1696,19 +1444,15 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                 </div>
 
-
-
                 <div className="flex items-center gap-2 text-[#30352F]">
 
                   <Clock
 
                     size={16}
 
-                    className="text-[#997648] shrink-0"
+                    className="text-[#9B7B4C] shrink-0"
 
                   />
-
-
 
                   <div>
 
@@ -1732,19 +1476,13 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
             </div>
 
+            <div className="bg-white p-6 sm:p-8 rounded-[26px] border border-[#EAE8E1] shadow-[0_12px_35px_-28px_rgba(27,56,45,0.24)] space-y-5">
 
-
-            
-
-            <div className="bg-white p-4 min-[360px]:p-5 sm:p-6 rounded-2xl border border-[#E9E2D5] shadow-xs space-y-4">
-
-              <h3 className="text-lg font-serif font-bold text-[#30352F]">
+              <h3 className="text-xl sm:text-2xl font-serif font-semibold text-[#193E30]">
 
                 Équipements & Services
 
               </h3>
-
-
 
               <div className="flex flex-wrap gap-2">
 
@@ -1770,10 +1508,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
             </div>
 
-
-
-            
-
             <div
 
               id="rooms-selection-section"
@@ -1786,13 +1520,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                 <div>
 
-                  <h3 className="text-xl font-serif font-bold text-[#30352F]">
+                  <h3 className="text-2xl font-serif font-semibold text-[#193E30]">
 
                     Disponibilités
 
                   </h3>
-
-
 
                   <p className="text-xs text-[#666A61]">
 
@@ -1814,8 +1546,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               </div>
 
-
-
               {rooms.length === 0 ? (
 
                 <div className="bg-white p-8 rounded-2xl border border-[#E9E2D5] text-center space-y-2">
@@ -1827,8 +1557,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     pour ce logement
 
                   </p>
-
-
 
                   <p className="text-xs text-[#666A61]">
 
@@ -1896,23 +1624,17 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
             </div>
 
-
-
-            
-
-            <div className="bg-white p-6 rounded-2xl border border-[#E9E2D5] shadow-xs space-y-6">
+            <div className="bg-white p-6 sm:p-8 rounded-[26px] border border-[#EAE8E1] shadow-[0_12px_35px_-28px_rgba(27,56,45,0.24)] space-y-6">
 
               <div className="flex items-center justify-between">
 
                 <div>
 
-                  <h3 className="text-lg font-serif font-bold text-[#30352F]">
+                  <h3 className="text-xl sm:text-2xl font-serif font-semibold text-[#193E30]">
 
                     Avis des voyageurs
 
                   </h3>
-
-
 
                   <p className="text-xs text-[#666A61]">
 
@@ -1921,8 +1643,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                   </p>
 
                 </div>
-
-
 
                 <button
 
@@ -1938,7 +1658,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   }
 
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E8F0E9] text-[#284C3B] hover:bg-[#DCE9CF] rounded-lg text-xs font-bold transition cursor-pointer border border-[#D4E0D7]"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#ECF2ED] text-[#193E30] hover:bg-[#DCE9CF] rounded-lg text-xs font-bold transition cursor-pointer border border-[#D9E6DC]"
 
                 >
 
@@ -1947,8 +1667,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     size={14}
 
                   />
-
-
 
                   <span>
 
@@ -1959,10 +1677,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                 </button>
 
               </div>
-
-
-
-              
 
               {isReviewFormOpen && (
 
@@ -1986,11 +1700,9 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   </h4>
 
-
-
                   {reviewSuccess && (
 
-                    <div className="p-3 bg-[#E8F0E9] border border-[#D4E0D7] text-[#284C3B] text-xs rounded-lg font-bold">
+                    <div className="p-3 bg-[#ECF2ED] border border-[#D9E6DC] text-[#193E30] text-xs rounded-lg font-bold">
 
                       Avis envoyé avec succès !
 
@@ -2001,8 +1713,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     </div>
 
                   )}
-
-
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
@@ -2019,8 +1729,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                         Votre nom
 
                       </label>
-
-
 
                       <input
 
@@ -2048,13 +1756,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                         placeholder="Ex: Awa Ndiaye"
 
-                        className="w-full text-xs px-3 py-2 bg-white border border-[#E9E2D5] rounded-lg outline-none focus:border-[#284C3B]"
+                        className="w-full text-xs px-3 py-2 bg-white border border-[#E9E2D5] rounded-lg outline-none focus:border-[#193E30]"
 
                       />
 
                     </div>
-
-
 
                     <div>
 
@@ -2069,8 +1775,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                         Note globale (/5)
 
                       </label>
-
-
 
                       <select
 
@@ -2096,7 +1800,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                         }
 
-                        className="w-full text-xs px-3 py-2 bg-white border border-[#E9E2D5] rounded-lg outline-none font-bold text-[#30352F] focus:border-[#284C3B]"
+                        className="w-full text-xs px-3 py-2 bg-white border border-[#E9E2D5] rounded-lg outline-none font-bold text-[#30352F] focus:border-[#193E30]"
 
                       >
 
@@ -2106,15 +1810,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                         </option>
 
-
-
                         <option value={4}>
 
                           4 - Très bien
 
                         </option>
-
-
 
                         <option value={3}>
 
@@ -2122,15 +1822,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                         </option>
 
-
-
                         <option value={2}>
 
                           2 - Moyen
 
                         </option>
-
-
 
                         <option value={1}>
 
@@ -2143,8 +1839,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     </div>
 
                   </div>
-
-
 
                   <div>
 
@@ -2159,8 +1853,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                       Votre commentaire
 
                     </label>
-
-
 
                     <textarea
 
@@ -2188,13 +1880,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                       placeholder="Accueil chaleureux, cadre paisible face à la mer..."
 
-                      className="w-full text-xs p-3 bg-white border border-[#E9E2D5] rounded-lg outline-none focus:border-[#284C3B]"
+                      className="w-full text-xs p-3 bg-white border border-[#E9E2D5] rounded-lg outline-none focus:border-[#193E30]"
 
                     />
 
                   </div>
-
-
 
                   <div className="flex justify-end gap-2">
 
@@ -2220,8 +1910,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                     </button>
 
-
-
                     <button
 
                       type="submit"
@@ -2232,7 +1920,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                       }
 
-                      className="px-4 py-1.5 bg-[#284C3B] hover:bg-[#1B382D] text-white text-xs font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
+                      className="px-4 py-1.5 bg-[#193E30] hover:bg-[#193E30] text-white text-xs font-bold rounded-lg transition cursor-pointer disabled:opacity-50"
 
                     >
 
@@ -2249,10 +1937,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                 </form>
 
               )}
-
-
-
-              
 
               {publishedReviews.length === 0 ? (
 
@@ -2294,27 +1978,19 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
           </div>
 
-
-
-          
-
           <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-32">
 
-            
-
-            <div className="bg-white p-4 min-[360px]:p-5 rounded-2xl border-2 border-[#284C3B] shadow-md space-y-4">
+            <div className="bg-white p-5 sm:p-7 rounded-[26px] border border-[#D6E0D7] shadow-[0_22px_65px_-32px_rgba(27,56,45,0.35)] space-y-5">
 
               <div className="flex items-center justify-between pb-3 border-b border-[#E9E2D5]">
 
-                <span className="text-xs font-bold uppercase tracking-wider text-[#284C3B]">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#193E30]">
 
                   Récapitulatif séjour
 
                 </span>
 
-
-
-                <span className="text-xs font-bold text-[#997648] bg-[#F1EDE4] px-2 py-0.5 rounded border border-[#E9E2D5]">
+                <span className="text-xs font-bold text-[#9B7B4C] bg-[#F1EDE4] px-2 py-0.5 rounded border border-[#E9E2D5]">
 
                   {nightsCount} nuit
 
@@ -2327,10 +2003,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                 </span>
 
               </div>
-
-
-
-              
 
               <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-2 text-xs">
 
@@ -2347,8 +2019,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     Arrivée
 
                   </label>
-
-
 
                   <input
 
@@ -2380,8 +2050,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                 </div>
 
-
-
                 <div className="bg-[#F7F5EF] p-2.5 rounded-xl border border-[#E9E2D5]">
 
                   <label
@@ -2395,8 +2063,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     Départ
 
                   </label>
-
-
 
                   <input
 
@@ -2426,21 +2092,15 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               </div>
 
-
-
-              
-
               {selectedRoom ? (
 
-                <div className="bg-[#E8F0E9] p-3.5 rounded-xl border border-[#D4E0D7] space-y-1">
+                <div className="bg-[#ECF2ED] p-3.5 rounded-xl border border-[#D9E6DC] space-y-1">
 
-                  <p className="text-[11px] font-bold text-[#284C3B] uppercase">
+                  <p className="text-[11px] font-bold text-[#193E30] uppercase">
 
                     Offre sélectionnée :
 
                   </p>
-
-
 
                   <p className="text-xs font-bold text-[#30352F]">
 
@@ -2448,9 +2108,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   </p>
 
-
-
-                  <p className="text-xs text-[#997648] font-semibold">
+                  <p className="text-xs text-[#9B7B4C] font-semibold">
 
                     {formatFCFA(
 
@@ -2464,8 +2122,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   </p>
 
-
-
                   {selectedRoomPricing?.hasSpecialRates && (
 
                     <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded">
@@ -2475,8 +2131,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     </span>
 
                   )}
-
-
 
                   {selectedRoomPricing?.isAvailable ===
 
@@ -2491,8 +2145,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                     </p>
 
                   )}
-
-
 
                   {!selectedRoomPricing && (
 
@@ -2510,7 +2162,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               ) : (
 
-                <p className="text-xs text-[#997648] bg-[#F1EDE4] p-2.5 rounded-xl border border-[#E9E2D5]">
+                <p className="text-xs text-[#9B7B4C] bg-[#F1EDE4] p-2.5 rounded-xl border border-[#E9E2D5]">
 
                   Veuillez choisir une offre dans
 
@@ -2519,10 +2171,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                 </p>
 
               )}
-
-
-
-              
 
               {selectedRoom && (
 
@@ -2544,8 +2192,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                     </span>
 
-
-
                     <span>
 
                       {formatFCFA(
@@ -2558,8 +2204,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   </div>
 
-
-
                   <div className="flex justify-between items-baseline pt-2">
 
                     <span className="text-sm font-serif font-bold text-[#30352F]">
@@ -2568,9 +2212,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                     </span>
 
-
-
-                    <span className="text-xl font-serif font-bold text-[#997648]">
+                    <span className="text-xl font-serif font-bold text-[#9B7B4C]">
 
                       {formatFCFA(
 
@@ -2582,8 +2224,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   </div>
 
-
-
                   <p className="text-[10px] text-[#777B73]">
 
                     Montant indicatif selon les conditions de réservation affichées
@@ -2593,10 +2233,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                 </div>
 
               )}
-
-
-
-              
 
               <button
 
@@ -2620,7 +2256,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                 onClick={handleProceed}
 
-                className="w-full py-3.5 bg-[#D97706] hover:bg-[#B45309] active:bg-[#92400E] text-white font-extrabold text-sm rounded-xl transition shadow-xs hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-3.5 bg-[#193E30] hover:bg-[#193E30] active:bg-[#14291F] text-white font-extrabold text-sm rounded-xl transition shadow-xs hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
 
               >
 
@@ -2654,19 +2290,15 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               </button>
 
-
-
               <div className="flex items-center gap-2 text-xs text-[#666A61] pt-1">
 
                 <ShieldCheck
 
                   size={16}
 
-                  className="text-[#284C3B] shrink-0"
+                  className="text-[#193E30] shrink-0"
 
                 />
-
-
 
                 <span>
 
@@ -2678,11 +2310,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
             </div>
 
-
-
-            
-
-            <div className="bg-white p-5 rounded-2xl border border-[#E9E2D5] shadow-xs space-y-3">
+            <div className="bg-white p-6 rounded-[26px] border border-[#EAE8E1] shadow-sm space-y-4">
 
               <h4 className="font-serif font-bold text-sm text-[#30352F] flex items-center gap-1.5">
 
@@ -2690,17 +2318,13 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
                   size={16}
 
-                  className="text-[#997648]"
+                  className="text-[#9B7B4C]"
 
                 />
-
-
 
                 <span>Emplacement</span>
 
               </h4>
-
-
 
               <p className="text-xs text-[#666A61]">
 
@@ -2708,10 +2332,8 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
               </p>
 
-
-
               {directionsUrl ? (
-                <a href={directionsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#284C3B] hover:bg-[#1B382D] text-white py-3 text-sm font-bold transition">
+                <a href={directionsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#193E30] hover:bg-[#193E30] text-white py-3 text-sm font-bold transition">
                   <Navigation size={17} /> Obtenir l'itinéraire
                 </a>
               ) : (
@@ -2731,7 +2353,5 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
   );
 
 };
-
-
 
 export default HotelDetailPage;

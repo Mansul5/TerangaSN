@@ -10,7 +10,8 @@ import {
   Info,
   Sparkles,
   Lock,
-  Tag
+  Tag,
+  ArrowUpRight
 } from 'lucide-react';
 
 import { RoomType } from '@/src/types';
@@ -52,21 +53,21 @@ export const RoomCard: React.FC<RoomCardProps> = ({
     switch (policy) {
       case 'free_cancellation':
         return (
-          <div className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[#D1DBC2] bg-[#ECF3E5] px-2.5 py-1 text-xs font-semibold text-[#3F6212]">
+          <div className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[#D5E6D9] bg-[#F0F7F1] px-3 py-1.5 text-xs font-semibold text-[#285541]">
             <ShieldCheck size={14} className="shrink-0" />
             <span>Annulation GRATUITE</span>
           </div>
         );
       case 'flexible':
         return (
-          <div className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[#E6E2D3] bg-[#F0EDE4] px-2.5 py-1 text-xs font-semibold text-[#8B5E34]">
+          <div className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[#E8DDC8] bg-[#FBF7EE] px-3 py-1.5 text-xs font-semibold text-[#947448]">
             <Check size={14} className="shrink-0" />
             <span>Annulation flexible</span>
           </div>
         );
       default:
         return (
-          <div className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-[#F0EDE4] px-2.5 py-1 text-xs font-medium text-[#6B6658]">
+          <div className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-[#F5F2EC] px-3 py-1.5 text-xs font-medium text-[#706D65]">
             <Info size={14} className="shrink-0" />
             <span>Non remboursable</span>
           </div>
@@ -77,19 +78,19 @@ export const RoomCard: React.FC<RoomCardProps> = ({
   return (
     <div
       id={`room-card-${room.id}`}
-      className={`overflow-hidden rounded-2xl border p-4 transition-all duration-200 sm:p-5 ${
+      className={`group relative overflow-hidden rounded-[26px] border p-5 transition-all duration-300 sm:p-7 ${
         !isAvailable
-          ? 'border-gray-200 bg-gray-50/70 opacity-80'
+          ? 'border-[#E7E5DF] bg-[#FAF9F6] opacity-85'
           : isSelected
-            ? 'border-[#3F6212] bg-[#ECF3E5]/20 ring-2 ring-[#3F6212]/20 shadow-md'
-            : 'border-[#E6E2D3] bg-white hover:border-[#D9D5C3] hover:shadow-xs'
+            ? 'border-[#2D5A46] bg-[#F7FAF6] ring-2 ring-[#2D5A46]/10 shadow-[0_18px_55px_-35px_rgba(29,70,49,0.5)]'
+            : 'border-[#E9E5DC] bg-white hover:border-[#C9D7CB] hover:shadow-[0_20px_55px_-38px_rgba(26,62,45,0.45)]'
       }`}
     >
-      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-12">
-        <div className="space-y-3 lg:col-span-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-0">
+        <div className="space-y-4 lg:col-span-5 lg:pr-7">
           <div className="flex min-w-0 items-start justify-between gap-2">
             <div className="min-w-0">
-              <h4 className="break-words font-serif text-base font-bold leading-tight text-[#2D2A26] sm:text-lg">
+              <h4 className="break-words font-serif text-xl font-semibold leading-tight tracking-tight text-[#1D392D] sm:text-2xl">
                 {room.name}
               </h4>
 
@@ -110,28 +111,28 @@ export const RoomCard: React.FC<RoomCardProps> = ({
           </div>
 
           {room.description && (
-            <p className="break-words text-xs leading-relaxed text-[#6B6658]">
+            <p className="break-words text-sm leading-6 text-[#77776F]">
               {room.description}
             </p>
           )}
 
-          <div className="flex flex-wrap gap-1.5 text-xs text-[#2D2A26] sm:gap-2">
+          <div className="flex flex-wrap gap-2 text-xs text-[#35483D]">
             {room.bed_type && (
-              <span className="flex max-w-full items-center gap-1.5 rounded-lg border border-[#E6E2D3] bg-[#F0EDE4] px-2.5 py-1 font-medium">
-                <Bed size={14} className="shrink-0 text-[#8B5E34]" />
+              <span className="flex max-w-full items-center gap-1.5 rounded-full border border-[#EAE7DF] bg-[#FAF9F6] px-3 py-1.5 font-medium">
+                <Bed size={14} className="shrink-0 text-[#A18455]" />
                 <span className="break-words">{room.bed_type}</span>
               </span>
             )}
 
             {room.size_sqm && (
-              <span className="flex items-center gap-1.5 rounded-lg border border-[#E6E2D3] bg-[#F0EDE4] px-2.5 py-1 font-medium">
-                <Maximize2 size={14} className="text-[#8B5E34]" />
+              <span className="flex items-center gap-1.5 rounded-full border border-[#EAE7DF] bg-[#FAF9F6] px-3 py-1.5 font-medium">
+                <Maximize2 size={14} className="text-[#A18455]" />
                 {room.size_sqm} m²
               </span>
             )}
 
-            <span className="flex max-w-full items-center gap-1.5 rounded-lg border border-[#E6E2D3] bg-[#F0EDE4] px-2.5 py-1 font-medium">
-              <Users size={14} className="shrink-0 text-[#8B5E34]" />
+            <span className="flex max-w-full items-center gap-1.5 rounded-full border border-[#EAE7DF] bg-[#FAF9F6] px-3 py-1.5 font-medium">
+              <Users size={14} className="shrink-0 text-[#A18455]" />
               <span>
                 Jusqu&apos;à {room.capacity_adults} adulte{room.capacity_adults > 1 ? 's' : ''}
                 {room.capacity_children > 0 && ` + ${room.capacity_children} enfant`}
@@ -141,10 +142,10 @@ export const RoomCard: React.FC<RoomCardProps> = ({
 
           {room.amenities && room.amenities.length > 0 && (
             <div className="pt-2">
-              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-[#6B6658]">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#89877D]">
                 Équipements inclus
               </p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {room.amenities.map((item, idx) => (
                   <BadgeEquipement key={idx} id={item} size="sm" />
                 ))}
@@ -153,38 +154,38 @@ export const RoomCard: React.FC<RoomCardProps> = ({
           )}
         </div>
 
-        <div className="flex flex-col justify-center space-y-3 border-t border-[#E6E2D3] pt-4 lg:col-span-3 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-[#6B6658]">
+        <div className="flex flex-col justify-center space-y-4 border-t border-[#ECE8DF] pt-5 lg:col-span-3 lg:border-l lg:border-t-0 lg:px-7 lg:pt-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#89877D]">
             Conditions du séjour
           </p>
 
           <div>{getCancellationBadge(room.cancellation_policy)}</div>
 
-          <div className="space-y-1.5 text-xs text-[#6B6658]">
-            <div className="flex items-start gap-1.5 text-[#2D2A26]">
-              <CalendarCheck size={14} className="mt-0.5 shrink-0 text-[#3F6212]" />
+          <div className="space-y-3 text-xs leading-5 text-[#77776F]">
+            <div className="flex items-start gap-1.5 text-[#4B5B50]">
+              <CalendarCheck size={14} className="mt-0.5 shrink-0 text-[#2D5A46]" />
               <span>Confirmation selon les conditions de l&apos;hébergement</span>
             </div>
-            <div className="flex items-start gap-1.5 text-[#2D2A26]">
-              <Sparkles size={14} className="mt-0.5 shrink-0 text-[#D97706]" />
+            <div className="flex items-start gap-1.5 text-[#4B5B50]">
+              <Sparkles size={14} className="mt-0.5 shrink-0 text-[#A18455]" />
               <span>Modalités de paiement indiquées avant confirmation</span>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col justify-between border-t border-[#E6E2D3] pt-4 lg:col-span-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+        <div className="flex flex-col justify-between border-t border-[#ECE8DF] pt-5 lg:col-span-4 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0">
           <div className="text-left min-[380px]:text-right">
-            <p className="text-xs text-[#6B6658]">
+            <p className="text-xs text-[#89877D]">
               Prix pour {nightsCount} nuit{nightsCount > 1 ? 's' : ''}
             </p>
 
             <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5 min-[380px]:justify-end">
-              <span className="break-words font-serif text-xl font-bold text-[#8B5E34] sm:text-2xl">
+              <span className="break-words font-serif text-xl font-bold text-[#A18455] sm:text-2xl">
                 {formatFCFA(effectiveTotalPrice)}
               </span>
             </div>
 
-            <p className="mt-0.5 text-xs text-[#6B6658]">
+            <p className="mt-0.5 text-xs text-[#89877D]">
               {formatFCFA(effectiveNightlyPrice)} / nuit (moy.)
             </p>
 
@@ -196,18 +197,18 @@ export const RoomCard: React.FC<RoomCardProps> = ({
             )}
           </div>
 
-          <div className="mt-4 flex items-center justify-stretch pt-3 min-[380px]:justify-end">
+          <div className="mt-6 flex items-center justify-stretch pt-3 min-[380px]:justify-end">
             <button
               type="button"
               id={`select-room-btn-${room.id}`}
               disabled={!isAvailable}
               onClick={() => onSelect(room, selectedQuantity || 1)}
-              className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-xs transition min-[380px]:w-auto sm:px-5 sm:text-sm ${
+              className={`flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-semibold shadow-sm transition-all duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2D5A46] min-[380px]:w-auto sm:px-5 sm:text-sm ${
                 !isAvailable
-                  ? 'cursor-not-allowed bg-gray-200 text-gray-400'
+                  ? 'cursor-not-allowed bg-[#E9E8E3] text-[#9C9B94]'
                   : isSelected
-                    ? 'cursor-pointer bg-[#3F6212] text-white hover:bg-[#365314]'
-                    : 'cursor-pointer bg-[#D97706] text-white hover:bg-[#B45309] hover:shadow-md'
+                    ? 'cursor-pointer bg-[#244B39] text-white hover:bg-[#193D2D]'
+                    : 'cursor-pointer bg-[#284C3B] text-white hover:bg-[#193D2D] hover:shadow-lg'
               }`}
             >
               {!isAvailable ? (
@@ -221,7 +222,7 @@ export const RoomCard: React.FC<RoomCardProps> = ({
                   <span>Sélectionnée</span>
                 </>
               ) : (
-                <span>Choisir cette chambre</span>
+                <><span>Choisir cette chambre</span><ArrowUpRight size={15} /></>
               )}
             </button>
           </div>

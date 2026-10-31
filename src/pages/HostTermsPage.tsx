@@ -4,7 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Building2,
-  Check,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -19,6 +19,7 @@ import {
 interface HostTermsPageProps {
   onBack: () => void;
   onContinue: () => void;
+  readOnly?: boolean;
 }
 
 interface TermSection {
@@ -34,6 +35,7 @@ export const HostTermsPage: React.FC<
 > = ({
   onBack,
   onContinue,
+  readOnly = false,
 }) => {
   const [acceptedTerms, setAcceptedTerms] =
     useState(false);
@@ -57,228 +59,100 @@ export const HostTermsPage: React.FC<
 
   const termSections: TermSection[] =
     useMemo(
-      () => [
-        {
-          id: 'responsibility',
-          icon: UserCheck,
-          title:
-            'Votre responsabilité en tant qu’hôte',
-          summary:
-            'Vous êtes responsable des informations et des hébergements que vous publiez.',
+      () => {
+        const sections = [
+          {
+            id: 'object',
+            icon: FileCheck2,
+            title: '1. Objet',
+            summary: 'Règles applicables aux hôteliers et gestionnaires sur la plateforme.',
+            paragraphs: [
+              'Ces règles complètent les Conditions Générales d’Utilisation et s’appliquent aux comptes enregistrés comme hôteliers, gestionnaires, propriétaires ou responsables d’établissement.',
+            ],
+          },
+          {
+            id: 'accuracy',
+            icon: CheckCircle2,
+            title: '2. Véracité des informations',
+            summary: 'Les informations sur l’établissement doivent être exactes.',
+            paragraphs: [
+              'L’hôtelier s’engage à fournir des informations exactes sur l’établissement : nom, localisation, services, tarifs, disponibilité, contact, photos et conditions d’accueil.',
+            ],
+          },
+          {
+            id: 'publication',
+            icon: Building2,
+            title: '3. Publication d’un hébergement',
+            summary: 'Le contenu publié doit correspondre au service réellement proposé.',
+            paragraphs: [
+              'L’hôtelier est responsable du contenu qu’il publie. Il doit s’assurer que les informations sont loyales, complètes et conformes à la réalité. Les photos, descriptions et tarifs doivent être cohérents avec le service réellement proposé.',
+            ],
+          },
+          {
+            id: 'availability',
+            icon: CalendarDays,
+            title: '4. Disponibilités et réservations',
+            summary: 'Tenir les disponibilités à jour et éviter les réservations incompatibles.',
+            paragraphs: [
+              'L’hôtelier s’engage à maintenir ses disponibilités à jour, à traiter les demandes raisonnablement et à confirmer, refuser ou modifier les réservations de manière claire et professionnelle. Il ne doit pas accepter plusieurs réservations incompatibles pour la même période.',
+            ],
+          },
+          {
+            id: 'payment',
+            icon: ReceiptText,
+            title: '5. Conditions de paiement et d’annulation',
+            summary: 'Communiquer les règles applicables aux voyageurs.',
+            paragraphs: [
+              'L’hôtelier doit communiquer clairement les modalités de paiement, les conditions d’annulation et les politiques applicables aux réservations. Il s’engage à respecter les règles publiées sur sa fiche.',
+            ],
+          },
+          {
+            id: 'customer-service',
+            icon: Handshake,
+            title: '6. Service client',
+            summary: 'Assurer un accueil professionnel et conforme à l’offre annoncée.',
+            paragraphs: [
+              'L’hôtelier doit accueillir les voyageurs avec professionnalisme et garantir un service conforme à l’expérience annoncée. Il est responsable de la qualité de l’accueil et de la gestion des demandes reçues.',
+            ],
+          },
+          {
+            id: 'traveler-protection',
+            icon: UserCheck,
+            title: '7. Protection des voyageurs',
+            summary: 'Ne pas imposer de conditions abusives ou trompeuses.',
+            paragraphs: [
+              'L’hôtelier s’engage à ne pas imposer de conditions abusives, à ne pas demander de paiements non prévus, à ne pas modifier les règles après confirmation sans information claire, et à ne pas utiliser la plateforme à des fins trompeuses ou frauduleuses.',
+            ],
+          },
+          {
+            id: 'moderation',
+            icon: AlertTriangle,
+            title: '8. Modération et sanctions',
+            summary: 'Les manquements peuvent entraîner des mesures sur le compte ou l’établissement.',
+            paragraphs: [
+              'Le non-respect de ces règles peut entraîner un avertissement, une suspension du compte, la suppression de la fiche d’établissement ou un retrait temporaire de l’accès à la plateforme.',
+            ],
+          },
+          {
+            id: 'responsibility',
+            icon: ShieldCheck,
+            title: '9. Responsabilité directe',
+            summary: 'L’hôtelier reste responsable des services et engagements envers les voyageurs.',
+            paragraphs: [
+              'L’hôtelier est responsable de ses services, de son accueil, de la qualité de son offre et de ses engagements envers les voyageurs. La plateforme agit comme intermédiaire et n’exerce pas de contrôle direct sur l’exploitation de l’établissement, sauf en cas de faute de la plateforme.',
+            ],
+          },
+        ];
+
+        return sections.map((section) => ({
+          ...section,
           content: (
             <div className="space-y-3">
-              <p>
-                En utilisant l’espace hôte,
-                vous vous engagez à fournir
-                des informations exactes,
-                compréhensibles et à jour
-                concernant votre activité et
-                les hébergements que vous
-                gérez.
-              </p>
-
-              <p>
-                Les photos, descriptions,
-                équipements, tarifs,
-                disponibilités, règles et
-                conditions présentés aux
-                voyageurs doivent correspondre
-                autant que possible à la
-                réalité de l’hébergement.
-              </p>
-
-              <p>
-                Vous êtes également responsable
-                de la bonne gestion des
-                réservations reçues et du
-                respect des engagements pris
-                envers les voyageurs.
-              </p>
+              {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
             </div>
           ),
-        },
-        {
-          id: 'authorization',
-          icon: Building2,
-          title:
-            'Droit de gérer l’hébergement',
-          summary:
-            'Vous devez être autorisé à proposer et gérer l’hébergement sur la plateforme.',
-          content: (
-            <div className="space-y-3">
-              <p>
-                Vous pouvez utiliser l’espace
-                hôte en tant que propriétaire,
-                gérant, mandataire ou
-                représentant d’une entreprise
-                autorisée à exploiter
-                l’hébergement.
-              </p>
-
-              <p>
-                Vous devez disposer des droits
-                ou autorisations nécessaires
-                pour proposer l’hébergement,
-                recevoir des réservations et
-                prendre les décisions liées à
-                sa gestion.
-              </p>
-
-              <p>
-                Des justificatifs pourront être
-                demandés lorsque cela est
-                nécessaire, notamment avant la
-                publication ou pour certaines
-                fonctionnalités sensibles.
-              </p>
-            </div>
-          ),
-        },
-        {
-          id: 'traveler',
-          icon: Handshake,
-          title:
-            'Engagement envers les voyageurs',
-          summary:
-            'Les réservations confirmées doivent être honorées conformément aux conditions annoncées.',
-          content: (
-            <div className="space-y-3">
-              <p>
-                Lorsqu’une réservation est
-                confirmée, vous vous engagez à
-                accueillir le voyageur selon
-                les informations et conditions
-                communiquées au moment de la
-                réservation.
-              </p>
-
-              <p>
-                Toute modification importante
-                susceptible d’affecter un séjour
-                doit être communiquée dans les
-                meilleurs délais.
-              </p>
-
-              <p>
-                Les voyageurs doivent être
-                traités avec respect, sans
-                discrimination injustifiée, et
-                dans des conditions conformes
-                aux informations présentées sur
-                la plateforme.
-              </p>
-            </div>
-          ),
-        },
-        {
-          id: 'pricing',
-          icon: ReceiptText,
-          title:
-            'Tarifs, commissions et paiements',
-          summary:
-            'Les conditions financières applicables seront présentées clairement selon votre formule.',
-          content: (
-            <div className="space-y-3">
-              <p>
-                Les tarifs que vous configurez
-                doivent être cohérents avec les
-                conditions réellement proposées
-                aux voyageurs.
-              </p>
-
-              <p>
-                Selon la formule utilisée, des
-                commissions, frais de paiement,
-                abonnements ou autres frais
-                clairement identifiés peuvent
-                s’appliquer.
-              </p>
-
-              <p>
-                Les montants et règles
-                applicables doivent être
-                présentés avant leur application.
-                Certaines conditions peuvent
-                varier selon le mode de paiement
-                ou la formule choisie.
-              </p>
-            </div>
-          ),
-        },
-        {
-          id: 'verification',
-          icon: ShieldCheck,
-          title:
-            'Identité et vérifications',
-          summary:
-            'Certaines vérifications peuvent être nécessaires pour sécuriser la plateforme.',
-          content: (
-            <div className="space-y-3">
-              <p>
-                La création de votre espace hôte
-                ne signifie pas que tous les
-                justificatifs doivent être
-                fournis immédiatement.
-              </p>
-
-              <p>
-                Des vérifications d’identité,
-                de contact, d’activité ou du
-                droit de gérer un hébergement
-                peuvent toutefois être
-                demandées progressivement.
-              </p>
-
-              <p>
-                Certaines fonctionnalités,
-                notamment la publication ou des
-                opérations sensibles, peuvent
-                rester limitées tant que les
-                vérifications nécessaires ne
-                sont pas terminées.
-              </p>
-            </div>
-          ),
-        },
-        {
-          id: 'conduct',
-          icon: AlertTriangle,
-          title:
-            'Utilisation responsable de la plateforme',
-          summary:
-            'Les abus, fraudes ou comportements portant préjudice aux utilisateurs peuvent entraîner des restrictions.',
-          content: (
-            <div className="space-y-3">
-              <p>
-                Il est interdit d’utiliser la
-                plateforme pour publier de
-                fausses informations, tromper
-                des voyageurs, contourner
-                volontairement les règles de la
-                plateforme ou mener une
-                activité frauduleuse.
-              </p>
-
-              <p>
-                En cas de problème sérieux,
-                d’abus répétés ou de risque pour
-                les utilisateurs, certaines
-                fonctionnalités peuvent être
-                temporairement limitées.
-              </p>
-
-              <p>
-                Les mesures prises doivent
-                dépendre de la nature et de la
-                gravité de la situation, tout en
-                tenant compte des réservations
-                déjà confirmées et des voyageurs
-                concernés.
-              </p>
-            </div>
-          ),
-        },
-      ],
+        }));
+      },
       []
     );
 
@@ -306,46 +180,38 @@ export const HostTermsPage: React.FC<
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] text-[#2D2A26]">
-      {/* HEADER */}
-      <section className="border-b border-[#E6E2D3] bg-white">
-        <div className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6">
-          <button
-            type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#6B6658] transition hover:text-[#3F6212]"
-          >
-            <ArrowLeft size={17} />
-            Retour
-          </button>
-        </div>
-      </section>
-
-      {/* INTRO */}
-      <section className="mx-auto max-w-5xl px-3 pb-8 pt-8 sm:px-6 sm:pb-10 sm:pt-14">
+    <div className="boly-page min-h-screen bg-[#f8f7f3] text-[#26342c]">
+      {/* Retour intégré à la page : la navigation globale Boly reste l’unique header. */}
+      <section className="boly-container pb-8 pt-8 sm:pb-10 sm:pt-12">
+        <button
+          type="button"
+          onClick={onBack}
+          className="mb-10 inline-flex items-center gap-2 text-sm font-semibold text-[#193e30] transition hover:underline sm:mb-12"
+        >
+          <ArrowLeft size={17} />
+          Retour
+        </button>
         <div className="max-w-3xl">
-          <div className="inline-flex items-center gap-2 rounded-full bg-[#ECF3E5] px-3 py-1.5 text-xs font-bold text-[#3F6212]">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#dfe7dd] bg-[#f2f5f0] px-3 py-1.5 text-xs font-bold text-[#193e30]">
             <FileCheck2 size={15} />
-            Avant de commencer
+            {readOnly ? 'Informations pour les hôtes' : 'Avant de commencer'}
           </div>
 
-          <h1 className="mt-5 font-serif text-2xl font-bold leading-tight sm:text-4xl lg:text-5xl">
-            Les engagements essentiels de
-            votre espace hôte
+          <h1 className="mt-5 font-serif text-3xl font-medium leading-tight tracking-tight text-[#193e30] sm:text-4xl lg:text-5xl">
+            {readOnly ? 'Conditions spécifiques aux hôteliers et gestionnaires' : 'Conditions spécifiques aux hôteliers et gestionnaires'}
           </h1>
 
-          <p className="mt-5 max-w-2xl text-sm leading-relaxed text-[#6B6658] sm:text-base">
-            Quelques règles essentielles
-            permettent de protéger les hôtes,
-            les voyageurs et la qualité des
-            hébergements proposés sur la
-            plateforme.
+          <p className="mt-5 max-w-2xl text-sm leading-relaxed text-[#68756d] sm:text-base">
+            {readOnly
+              ? 'Ces engagements complètent les conditions générales d’utilisation. Leur acceptation est demandée avant la création de votre espace hôte.'
+              : 'Quelques règles essentielles permettent de protéger les hôtes, les voyageurs et la qualité des hébergements proposés sur la plateforme.'}
           </p>
+          <p className="mt-3 text-xs text-[#68756d]">Dernière mise à jour : 24 septembre 2026</p>
         </div>
 
         {/* INFORMATION BOX */}
-        <div className="mt-7 flex gap-3 sm:gap-4 rounded-2xl border border-[#D7E2C9] bg-[#F2F7ED] p-4 sm:p-5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#3F6212]">
+        {!readOnly && <div className="mt-7 flex gap-3 sm:gap-4 rounded-2xl border border-[#dfe7dd] bg-[#f2f5f0] p-4 sm:p-5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#193e30]">
             <Info size={18} />
           </div>
 
@@ -355,7 +221,7 @@ export const HostTermsPage: React.FC<
               hébergement progressivement
             </p>
 
-            <p className="mt-1 text-xs leading-relaxed text-[#6B6658] sm:text-sm">
+            <p className="mt-1 text-xs leading-relaxed text-[#68756d] sm:text-sm">
               Accepter ces engagements ne publie
               pas automatiquement votre
               hébergement. Vous pourrez
@@ -365,12 +231,12 @@ export const HostTermsPage: React.FC<
               approprié.
             </p>
           </div>
-        </div>
+        </div>}
       </section>
 
       {/* TERMS */}
       <section className="mx-auto max-w-5xl px-3 pb-8 sm:px-6 sm:pb-10">
-        <div className="overflow-hidden rounded-2xl sm:rounded-3xl border border-[#E6E2D3] bg-white shadow-sm">
+        <div className="overflow-hidden rounded-[24px] border border-[#e8e5dc] bg-white shadow-sm">
           {termSections.map(
             (section, index) => {
               const Icon = section.icon;
@@ -383,7 +249,7 @@ export const HostTermsPage: React.FC<
                   className={
                     index !==
                     termSections.length - 1
-                      ? 'border-b border-[#E6E2D3]'
+                      ? 'border-b border-[#e8e5dc]'
                       : ''
                   }
                 >
@@ -394,10 +260,10 @@ export const HostTermsPage: React.FC<
                         section.id
                       )
                     }
-                    className="flex w-full items-start justify-between gap-3 sm:gap-5 px-4 py-4 text-left transition hover:bg-[#FAF9F6] sm:px-7 sm:py-6"
+                    className="flex w-full items-start justify-between gap-3 sm:gap-5 px-4 py-4 text-left transition hover:bg-[#f8f7f3] sm:px-7 sm:py-6"
                   >
                     <div className="flex gap-3 sm:gap-4 min-w-0">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#ECF3E5] text-[#3F6212]">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f2f5f0] text-[#193e30]">
                         <Icon size={19} />
                       </div>
 
@@ -406,13 +272,13 @@ export const HostTermsPage: React.FC<
                           {section.title}
                         </h2>
 
-                        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#777166] sm:text-sm">
+                        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-[#68756d] sm:text-sm">
                           {section.summary}
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-2 shrink-0 text-[#8C887D]">
+                    <div className="mt-2 shrink-0 text-[#68756d]">
                       {isOpen ? (
                         <ChevronUp
                           size={18}
@@ -426,8 +292,8 @@ export const HostTermsPage: React.FC<
                   </button>
 
                   {isOpen && (
-                    <div className="border-t border-[#F0EDE4] bg-[#FAF9F6]/60 px-4 py-4 sm:px-7 sm:py-5">
-                      <div className="ml-0 max-w-3xl text-sm leading-relaxed text-[#5F5A50] sm:ml-14">
+                    <div className="border-t border-[#e8e5dc] bg-[#f8f7f3]/60 px-4 py-4 sm:px-7 sm:py-5">
+                      <div className="ml-0 max-w-3xl text-sm leading-relaxed text-[#4e5c52] sm:ml-14">
                         {section.content}
                       </div>
                     </div>
@@ -439,20 +305,19 @@ export const HostTermsPage: React.FC<
         </div>
       </section>
 
-      {/* ACCEPTANCE */}
-      <section className="mx-auto max-w-5xl px-3 pb-12 sm:px-6 sm:pb-16">
-        <div className="rounded-2xl sm:rounded-3xl border border-[#E6E2D3] bg-white p-4 sm:p-8 shadow-sm">
+      {!readOnly && <section className="mx-auto max-w-5xl px-3 pb-12 sm:px-6 sm:pb-16">
+        <div className="rounded-[24px] border border-[#e8e5dc] bg-white p-4 shadow-sm sm:p-8">
           <div className="flex items-start gap-4">
-            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#ECF3E5] text-[#3F6212] sm:flex">
+            <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f2f5f0] text-[#193e30] sm:flex">
               <CheckCircle2 size={21} />
             </div>
 
             <div className="flex-1">
-              <h2 className="font-serif text-xl sm:text-2xl font-bold">
+              <h2 className="font-serif text-xl font-semibold text-[#193e30] sm:text-2xl">
                 Confirmez vos engagements
               </h2>
 
-              <p className="mt-2 text-sm leading-relaxed text-[#6B6658]">
+              <p className="mt-2 text-sm leading-relaxed text-[#68756d]">
                 Ces confirmations sont
                 nécessaires avant de poursuivre
                 la création de votre espace hôte.
@@ -460,7 +325,7 @@ export const HostTermsPage: React.FC<
 
               <div className="mt-7 space-y-4">
                 {/* TERMS */}
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#E6E2D3] p-4 transition hover:border-[#BAC9A8]">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#e8e5dc] p-4 transition hover:border-[#a1845f]">
                   <input
                     type="checkbox"
                     checked={acceptedTerms}
@@ -469,10 +334,10 @@ export const HostTermsPage: React.FC<
                         event.target.checked
                       )
                     }
-                    className="mt-0.5 h-4 w-4 accent-[#3F6212]"
+                    className="mt-0.5 h-4 w-4 accent-[#193e30]"
                   />
 
-                  <span className="text-sm leading-relaxed text-[#4F4A42]">
+                  <span className="text-sm leading-relaxed text-[#26342c]">
                     J’ai lu et j’accepte les
                     engagements présentés pour
                     l’utilisation de mon espace
@@ -481,7 +346,7 @@ export const HostTermsPage: React.FC<
                 </label>
 
                 {/* ACCURACY */}
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#E6E2D3] p-4 transition hover:border-[#BAC9A8]">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#e8e5dc] p-4 transition hover:border-[#a1845f]">
                   <input
                     type="checkbox"
                     checked={
@@ -492,10 +357,10 @@ export const HostTermsPage: React.FC<
                         event.target.checked
                       )
                     }
-                    className="mt-0.5 h-4 w-4 accent-[#3F6212]"
+                    className="mt-0.5 h-4 w-4 accent-[#193e30]"
                   />
 
-                  <span className="text-sm leading-relaxed text-[#4F4A42]">
+                  <span className="text-sm leading-relaxed text-[#26342c]">
                     Je m’engage à fournir des
                     informations exactes et à
                     maintenir les informations de
@@ -504,7 +369,7 @@ export const HostTermsPage: React.FC<
                 </label>
 
                 {/* AUTHORIZATION */}
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#E6E2D3] p-4 transition hover:border-[#BAC9A8]">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#e8e5dc] p-4 transition hover:border-[#a1845f]">
                   <input
                     type="checkbox"
                     checked={
@@ -515,10 +380,10 @@ export const HostTermsPage: React.FC<
                         event.target.checked
                       )
                     }
-                    className="mt-0.5 h-4 w-4 accent-[#3F6212]"
+                    className="mt-0.5 h-4 w-4 accent-[#193e30]"
                   />
 
-                  <span className="text-sm leading-relaxed text-[#4F4A42]">
+                  <span className="text-sm leading-relaxed text-[#26342c]">
                     Je confirme être autorisé à
                     gérer ou représenter les
                     hébergements que j’ajouterai
@@ -528,15 +393,15 @@ export const HostTermsPage: React.FC<
               </div>
 
               {/* CONTINUE */}
-              <div className="mt-8 border-t border-[#E6E2D3] pt-6">
+              <div className="mt-8 border-t border-[#e8e5dc] pt-6">
                 <button
                   type="button"
                   disabled={!canContinue}
                   onClick={handleContinue}
                   className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-bold transition sm:w-auto ${
                     canContinue
-                      ? 'bg-[#3F6212] text-white shadow-sm hover:bg-[#365314]'
-                      : 'cursor-not-allowed bg-[#E6E2D3] text-[#9B978D]'
+                      ? 'bg-[#193e30] text-white shadow-sm hover:bg-[#10281f]'
+                      : 'cursor-not-allowed bg-[#e8e5dc] text-[#68756d]'
                   }`}
                 >
                   Accepter et continuer
@@ -546,7 +411,7 @@ export const HostTermsPage: React.FC<
                 </button>
 
                 {!canContinue && (
-                  <p className="mt-3 text-xs text-[#8C887D]">
+                  <p className="mt-3 text-xs text-[#68756d]">
                     Cochez les trois
                     confirmations pour
                     continuer.
@@ -558,23 +423,20 @@ export const HostTermsPage: React.FC<
         </div>
 
         {/* FOOTNOTE */}
-        <div className="mt-6 flex items-start gap-3 px-1 text-xs leading-relaxed text-[#8C887D]">
+        <div className="mt-6 flex items-start gap-3 px-1 text-xs leading-relaxed text-[#68756d]">
           <ShieldCheck
             size={16}
             className="mt-0.5 shrink-0"
           />
 
           <p>
-            Cette étape présente les
-            engagements essentiels du parcours
-            hôte. Les conditions contractuelles,
-            financières et politiques
-            applicables à la plateforme pourront
-            être présentées séparément dans leur
-            version complète et à jour.
+            Ces règles spécifiques complètent
+            les Conditions Générales
+            d’Utilisation de Teranga Booking
+            Sénégal.
           </p>
         </div>
-      </section>
+      </section>}
     </div>
   );
 };

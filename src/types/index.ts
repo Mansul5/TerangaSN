@@ -1,7 +1,7 @@
 export type UserRole = 'traveler' | 'owner' | 'admin';
 
 /**
- * Types de logements disponibles sur TerangaSN.
+ * Types de logements disponibles sur Boly.
  *
  * Le terme "logement" est désormais le concept générique.
  * "Hôtel" n'est qu'un type parmi les autres.
@@ -19,6 +19,21 @@ export type LodgingCategory =
  * Alias temporaire de compatibilité.
  */
 export type HotelCategory = LodgingCategory;
+
+/**
+ * Cycle de publication des logements.
+ * draft : préparation privée ; pending : soumis à validation ;
+ * approved : dossier validé, non publié ; published : visible sur la plateforme ;
+ * unpublished : retiré de la publication ; rejected : corrections demandées.
+ * L'acceptation de ces valeurs doit aussi être garantie côté Supabase.
+ */
+export type LodgingPublicationStatus =
+  | 'draft'
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'published'
+  | 'unpublished';
 
 export type BookingStatus =
   | 'pending'
@@ -73,7 +88,7 @@ export interface Lodging {
   email: string | null;
   check_in_time: string;
   check_out_time: string;
-  status: 'pending' | 'published' | 'rejected' | 'draft';
+  status: LodgingPublicationStatus;
   is_published?: boolean;
   commission_rate: number;
   featured: boolean;
@@ -152,11 +167,13 @@ export interface Booking {
   total_price: number;
   commission_amount: number;
   guest_name: string;
-  guest_email: string;
+  guest_email: string | null;
   guest_phone: string;
   special_requests: string | null;
   status: BookingStatus;
   payment_status: 'on_site_unpaid' | 'on_site_paid';
+  booking_source?: 'marketplace' | 'direct' | 'manual';
+  manual_channel?: 'whatsapp' | 'telephone' | 'sur_place' | 'autre' | null;
   created_at: string;
   updated_at?: string;
 

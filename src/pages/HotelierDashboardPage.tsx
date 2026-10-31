@@ -1,11 +1,12 @@
 /**
  * TerangaSN Manager — interface hôte.
- * Les réservations manuelles et les modifications locales restent des aperçus
- * sans persistance Supabase. Ne pas utiliser ces données pour garantir une disponibilité.
+ * Les réservations manuelles et les modifications de catégories de chambres
+ * sont enregistrées dans Supabase.
  */
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -57,7 +58,12 @@ import {
   fetchOwnerHotels,
   fetchHotelBookings,
   fetchHotelRooms,
+  uploadHotelPhoto,
+  updateHotel,
   createRoomType,
+  saveRoomType,
+  createManualBooking,
+  setManualBookingPayment,
   updateBookingStatus,
 } from '@/src/lib/supabase/api';
 
@@ -67,6 +73,7 @@ import {
 } from '@/src/lib/formatters';
 
 import { useAuth } from '@/src/context/AuthContext';
+import { supabase } from '@/src/lib/supabase/client';
 
 import { RoomAvailabilityCalendar } from '@/src/components/hotelier/RoomAvailabilityCalendar';
 
@@ -86,6 +93,17 @@ const getCategoryLabel = (
   CATEGORY_LABELS[category] ||
   'Hébergement';
 
+const publicationStatusLabel = (hotel: Lodging) => {
+  switch (String(hotel.status)) {
+    case 'published': return 'Publié';
+    case 'approved': return 'Approuvé · prêt à publier';
+    case 'unpublished': return 'Dépublié · republiable';
+    case 'pending': return 'En attente d’approbation';
+    case 'rejected': return 'Demande rejetée';
+    default: return 'En préparation';
+  }
+};
+
 type ManualSource = 'whatsapp' | 'telephone' | 'sur_place' | 'autre';
 interface ManualReservation {
   id: string;
@@ -97,14 +115,23 @@ interface ManualReservation {
   checkOut: string;
   source: ManualSource;
   amount: number;
-  status: 'confirmed' | 'cancelled';
+  status: Booking['status'];
   payment: 'unpaid' | 'paid';
+}
+interface ManualReservationInput {
+  roomId: string;
+  guestName: string;
+  guestPhone: string;
+  guestEmail: string;
+  checkIn: string;
+  checkOut: string;
+  roomsCount: number;
+  source: ManualSource;
+  amount: number;
 }
 const manualSourceLabels: Record<ManualSource, string> = {
   whatsapp: 'WhatsApp', telephone: 'Téléphone', sur_place: 'Sur place', autre: 'Autre',
 };
-const dateOverlap = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
-  aStart < bEnd && bStart < aEnd;
 const csvEscape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 const downloadCSV = (name: string, rows: unknown[][]) => {
   const content = '\uFEFF' + rows.map(row => row.map(csvEscape).join(';')).join('\r\n');
@@ -132,6 +159,7 @@ type DashboardSection =
   | 'team'
   | 'subscription'
   | 'lodgings'
+  | 'legal'
   | 'bookings'
   | 'clients'
   | 'rooms'
@@ -203,19 +231,38 @@ export const HotelierDashboardPage: React.FC<
   const [bookings, setBookings] =
     useState<Booking[]>([]);
 
+  const manualReservations = useMemo<ManualReservation[]>(
+    () => bookings
+      .filter((booking) => booking.booking_source === 'manual')
+      .map((booking) => ({
+        id: booking.id,
+        hotelId: booking.hotel_id,
+        roomId: booking.room_type_id,
+        guestName: booking.guest_name,
+        guestPhone: booking.guest_phone,
+        checkIn: booking.check_in,
+        checkOut: booking.check_out,
+        source: booking.manual_channel || 'autre',
+        amount: booking.total_price,
+        status: booking.status,
+        payment: booking.payment_status === 'on_site_paid' ? 'paid' : 'unpaid',
+      })),
+    [bookings]
+  );
+
   const [rooms, setRooms] =
     useState<RoomType[]>([]);
 
-  // Brouillons de démonstration, uniquement en mémoire : aucune écriture en base.
-  const [manualReservations, setManualReservations] = useState<ManualReservation[]>([]);
-
-  // Ne jamais laisser les brouillons de démonstration visibles après déconnexion.
-  useEffect(() => {
-    if (!user) setManualReservations([]);
-  }, [user?.id]);
-
   const [isLoading, setIsLoading] =
     useState<boolean>(true);
+  const [manageHotelId, setManageHotelId] = useState<string | null>(null);
+  const [publicationBusy, setPublicationBusy] = useState(false);
+  const [publicationError, setPublicationError] = useState('');
+  const [publicationNotice, setPublicationNotice] = useState('');
+  const [publicationConfirm, setPublicationConfirm] = useState<'publish' | 'unpublish' | null>(null);
+  const [publicationLegalVerified, setPublicationLegalVerified] = useState<boolean | null>(null);
+  const [publicationLegalLoading, setPublicationLegalLoading] = useState(false);
+
 
   const [
     activeSection,
@@ -300,6 +347,8 @@ export const HotelierDashboardPage: React.FC<
     hasEditingRoomChanges,
     setHasEditingRoomChanges,
   ] = useState(false);
+
+  const [isSavingEditedRoom, setIsSavingEditedRoom] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Lodging profile editor (frontend draft only)
@@ -445,6 +494,7 @@ export const HotelierDashboardPage: React.FC<
   const handleHotelChange = async (
     lodging: Lodging
   ) => {
+    if (selectedHotel?.id === lodging.id) return;
     setSelectedHotel(lodging);
     setCalendarSelectedRoomId('');
     setIsLoading(true);
@@ -456,6 +506,78 @@ export const HotelierDashboardPage: React.FC<
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const managedHotel = hotels.find(h => h.id === manageHotelId) || null;
+  const managedRooms = managedHotel?.id === selectedHotel?.id ? rooms : (managedHotel?.room_types || []);
+  const managedStatus = managedHotel ? String(managedHotel.status) : '';
+  const publicationChecks = managedHotel ? [
+    { label: 'Approbation administrative', ok: ['approved', 'published', 'unpublished'].includes(managedStatus), route: 'legal' as DashboardSection },
+    { label: 'Dossier juridique vérifié', ok: publicationLegalVerified === true, route: 'legal' as DashboardSection },
+    { label: 'Nom et description', ok: Boolean(managedHotel.name?.trim() && managedHotel.description?.trim()), route: 'settings' as DashboardSection },
+    { label: 'Adresse et localisation', ok: Boolean(managedHotel.address?.trim() && managedHotel.city?.trim() && managedHotel.region?.trim()), route: 'settings' as DashboardSection },
+    { label: 'Contact joignable', ok: Boolean(managedHotel.phone?.trim() || managedHotel.email?.trim()), route: 'settings' as DashboardSection },
+    { label: 'Au moins une photo', ok: Boolean(managedHotel.photos?.some(p => p.trim())), route: 'settings' as DashboardSection },
+    { label: 'Une offre réservable (prix et inventaire)', ok: managedRooms.some(r => Number(r.total_rooms) > 0 && Number(r.price_per_night) > 0), route: 'rooms' as DashboardSection },
+  ] : [];
+  const canPublishNow = Boolean(managedHotel && ['approved', 'unpublished'].includes(managedStatus) && !publicationLegalLoading && publicationChecks.every(c => c.ok));
+
+  const openManageHotel = async (hotel: Lodging) => {
+    setPublicationError('');
+    setPublicationNotice('');
+    setPublicationConfirm(null);
+    setManageHotelId(hotel.id);
+    setPublicationLegalVerified(null);
+    setPublicationLegalLoading(true);
+    // The chosen property is selected without changing the current workspace.
+    // No full-screen spinner or forced scroll while opening the management sheet.
+    if (selectedHotel?.id !== hotel.id) {
+      setSelectedHotel(hotel);
+      await loadHotelSpecificData(hotel.id);
+    }
+    try {
+      const { data, error } = await supabase.from('hotel_legal_dossiers')
+        .select('status').eq('hotel_id', hotel.id).maybeSingle();
+      if (error) throw error;
+      setPublicationLegalVerified(data?.status === 'verified');
+    } catch (error) {
+      setPublicationError('Vérification juridique indisponible : ' + (error instanceof Error ? error.message : 'erreur réseau'));
+    } finally {
+      setPublicationLegalLoading(false);
+    }
+  };
+
+  const applyPublication = async () => {
+    if (!managedHotel || !publicationConfirm || publicationBusy) return;
+    const action = publicationConfirm;
+    if (action === 'publish' && !canPublishNow) {
+      setPublicationError('Vérifiez les conditions de publication avant de continuer.');
+      return;
+    }
+    setPublicationBusy(true);
+    setPublicationError('');
+    try {
+      const { data, error } = await supabase.rpc('owner_change_hotel_publication', {
+        p_hotel_id: managedHotel.id,
+        p_publish: action === 'publish',
+      });
+      if (error) throw error;
+      const returned = data as { status?: string } | null;
+      const expected = action === 'publish' ? 'published' : 'unpublished';
+      if (returned?.status !== expected) throw new Error('La base n’a pas confirmé le changement de statut attendu.');
+      const updated = { ...managedHotel, status: expected as Lodging['status'], is_published: action === 'publish' };
+      setHotels(previous => previous.map(h => h.id === managedHotel.id ? updated : h));
+      setSelectedHotel(previous => previous?.id === managedHotel.id ? updated : previous);
+      setPublicationNotice(action === 'publish' ? 'Établissement publié. Il est désormais éligible à la recherche publique.' : 'Établissement dépublié. Les réservations existantes sont conservées.');
+      setPublicationConfirm(null);
+      // Re-fetch from the database so the display does not rely on an optimistic state.
+      const refreshed = await fetchOwnerHotels(user!.id);
+      if (refreshed.error) throw refreshed.error;
+      setHotels(refreshed.data || []);
+      setSelectedHotel(previous => refreshed.data?.find(h => h.id === previous?.id) || previous);
+    } catch (e) {
+      setPublicationError(e instanceof Error ? e.message : 'Changement de publication impossible.');
+    } finally { setPublicationBusy(false); }
   };
 
   // ---------------------------------------------------------------------------
@@ -492,7 +614,7 @@ export const HotelierDashboardPage: React.FC<
     setHasLodgingDraftChanges(false);
   };
 
-  const applyLodgingDraftLocally = () => {
+  const saveLodgingDraft = async (overrides: Partial<Lodging> = {}) => {
     if (
       !selectedHotel ||
       !lodgingDraft
@@ -500,9 +622,27 @@ export const HotelierDashboardPage: React.FC<
       return;
     }
 
+    const changes = { ...lodgingDraft, ...overrides };
+    const result = await updateHotel(selectedHotel.id, {
+      name: changes.name,
+      description: changes.description,
+      category: changes.category,
+      region: changes.region,
+      city: changes.city,
+      address: changes.address,
+      amenities: changes.amenities,
+      photos: changes.photos,
+      phone: changes.phone,
+      email: changes.email,
+    });
+    if (result.error || !result.data) {
+      throw result.error || new Error('Impossible d’enregistrer la fiche.');
+    }
+
     const updatedLodging = {
       ...selectedHotel,
-      ...lodgingDraft,
+      ...changes,
+      ...result.data,
     } as Lodging;
 
     setSelectedHotel(
@@ -590,6 +730,69 @@ export const HotelierDashboardPage: React.FC<
         setUpdatingBookingId(null);
       }
     };
+
+  const handleAddManualBooking = async (
+    hotelId: string,
+    reservation: ManualReservationInput
+  ) => {
+    const { data, error } = await createManualBooking({
+      hotel_id: hotelId,
+      room_type_id: reservation.roomId,
+      check_in: reservation.checkIn,
+      check_out: reservation.checkOut,
+      rooms_count: reservation.roomsCount,
+      guest_name: reservation.guestName,
+      guest_phone: reservation.guestPhone,
+      guest_email: reservation.guestEmail.trim() || null,
+      manual_channel: reservation.source,
+      total_price: reservation.amount,
+    });
+
+    if (error) throw error;
+    if (!data) throw new Error('La réservation a été créée sans retour de données.');
+
+    setBookings((previous) => [
+      {
+        ...data,
+        room_type: rooms.find((room) => room.id === data.room_type_id),
+      },
+      ...previous,
+    ]);
+  };
+
+  const handleUpdateManualBooking = async (
+    bookingId: string,
+    patch: Partial<ManualReservation>
+  ) => {
+    if (patch.status === 'confirmed' || patch.status === 'cancelled' || patch.status === 'completed') {
+      await handleUpdateBookingStatus(bookingId, patch.status);
+      return;
+    }
+
+    if (!patch.payment || updatingBookingId) return;
+    setUpdatingBookingId(bookingId);
+    try {
+      const { error } = await setManualBookingPayment(
+        bookingId,
+        patch.payment === 'paid' ? 'on_site_paid' : 'on_site_unpaid'
+      );
+      if (error) throw error;
+      setBookings((previous) =>
+        previous.map((booking) =>
+          booking.id === bookingId
+            ? {
+                ...booking,
+                payment_status: patch.payment === 'paid' ? 'on_site_paid' : 'on_site_unpaid',
+              }
+            : booking
+        )
+      );
+    } catch (error: any) {
+      alert(error?.message || 'Erreur lors de la mise à jour du paiement.');
+    } finally {
+      setUpdatingBookingId(null);
+    }
+  };
 
   // ---------------------------------------------------------------------------
   // Create room
@@ -742,64 +945,72 @@ export const HotelierDashboardPage: React.FC<
     setHasEditingRoomChanges(false);
   };
 
-  const applyEditingRoomLocally = (
+  const applyEditingRoomLocally = async (
     event: React.FormEvent
   ) => {
     event.preventDefault();
+    if (!editingRoom || !editingRoomDraft || isSavingEditedRoom) return;
 
-    if (!editingRoom || !editingRoomDraft) return;
-
-    const name = String(
-      editingRoomDraft.name || ''
-    ).trim();
-    const price = Number(
-      editingRoomDraft.price_per_night || 0
-    );
-    const quantity = Number(
-      editingRoomDraft.total_rooms || 0
-    );
-    const capacityAdults = Number(
-      editingRoomDraft.capacity_adults || 0
-    );
+    const name = String(editingRoomDraft.name ?? '').trim();
+    const price = Number(editingRoomDraft.price_per_night);
+    const quantity = Number(editingRoomDraft.total_rooms);
+    const capacityAdults = Number(editingRoomDraft.capacity_adults);
+    const capacityChildren = Number(editingRoomDraft.capacity_children ?? 0);
 
     if (!name) {
       alert("Veuillez renseigner le nom de l'offre.");
       return;
     }
-
-    if (price <= 0) {
+    if (!Number.isFinite(price) || price <= 0) {
       alert('Le prix par nuit doit être supérieur à 0.');
       return;
     }
-
-    if (quantity <= 0) {
-      alert('Le nombre de chambres doit être supérieur à 0.');
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      alert('Le nombre de chambres doit être un entier supérieur à 0.');
+      return;
+    }
+    if (!Number.isInteger(capacityAdults) || capacityAdults <= 0) {
+      alert('La capacité adulte doit être un entier supérieur à 0.');
+      return;
+    }
+    if (!Number.isInteger(capacityChildren) || capacityChildren < 0) {
+      alert('La capacité enfants doit être un entier positif ou nul.');
       return;
     }
 
-    if (capacityAdults <= 0) {
-      alert('La capacité adulte doit être supérieure à 0.');
-      return;
+    setIsSavingEditedRoom(true);
+    try {
+      // Only editable fields are sent; never overwrite IDs, hotel ownership,
+      // timestamps or other server-controlled columns from the UI draft.
+      const { data, error } = await saveRoomType({
+        id: editingRoom.id,
+        name,
+        price_per_night: price,
+        total_rooms: quantity,
+        capacity_adults: capacityAdults,
+        capacity_children: capacityChildren,
+        bed_type: editingRoomDraft.bed_type ?? '',
+        breakfast_included: Boolean(editingRoomDraft.breakfast_included),
+        photos: editingRoomDraft.photos ?? [],
+        amenities: editingRoomDraft.amenities ?? [],
+      });
+      if (error) throw error;
+      if (!data) throw new Error('Supabase n’a pas confirmé la sauvegarde.');
+
+      // Re-read the authoritative room record; don't silently fake success.
+      if (selectedHotel) {
+        const refreshed = await fetchHotelRooms(selectedHotel.id);
+        if (refreshed.error) throw refreshed.error;
+        setRooms(refreshed.data);
+      } else {
+        setRooms(previous => previous.map(room => room.id === data.id ? data : room));
+      }
+      closeRoomEditor();
+    } catch (error: any) {
+      alert(error?.message || "Impossible d'enregistrer les modifications dans Supabase.");
+    } finally {
+      setIsSavingEditedRoom(false);
     }
-
-    const updatedRoom = {
-      ...editingRoom,
-      ...editingRoomDraft,
-      name,
-      price_per_night: price,
-      total_rooms: quantity,
-      capacity_adults: capacityAdults,
-    } as RoomType;
-
-    setRooms((previous) =>
-      previous.map((room) =>
-        room.id === updatedRoom.id
-          ? updatedRoom
-          : room
-      )
-    );
-
-    closeRoomEditor();
   };
 
   // ---------------------------------------------------------------------------
@@ -1036,6 +1247,7 @@ export const HotelierDashboardPage: React.FC<
       icon: Building2,
       badge: hotels.length,
     },
+    { id: 'legal', label: 'Dossier juridique', icon: FileText },
     {
       id: 'bookings',
       label: 'Réservations',
@@ -1091,12 +1303,12 @@ export const HotelierDashboardPage: React.FC<
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F5EF]">
+    <div className="min-h-screen bg-[#F7F5EF] lg:flex lg:h-[calc(100dvh-96px)] lg:min-h-0 lg:flex-col lg:overflow-hidden">
       {/* ================================================================ */}
       {/* HEADER                                                           */}
       {/* ================================================================ */}
 
-      <header className="border-b border-[#1B382D] bg-[#284C3B] text-white">
+      <header className="shrink-0 border-b border-[#1B382D] bg-[#284C3B] text-white">
         <div className="mx-auto max-w-[1500px] px-3 py-4 sm:px-6 sm:py-5 lg:px-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -1260,11 +1472,11 @@ export const HotelierDashboardPage: React.FC<
       {/* LAYOUT                                                           */}
       {/* ================================================================ */}
 
-      <div className="mx-auto flex max-w-[1500px]">
+      <div className="mx-auto flex w-full max-w-[1500px] lg:min-h-0 lg:flex-1 lg:overflow-hidden">
         {/* SIDEBAR */}
 
-        <aside className="hidden w-[250px] shrink-0 border-r border-[#E9E2D5] bg-white lg:block">
-          <div className="sticky top-0 p-4">
+        <aside className="hidden w-[250px] shrink-0 overflow-y-auto overscroll-y-contain border-r border-[#E9E2D5] bg-white lg:block lg:h-full lg:min-h-0" aria-label="Menu Gestion">
+          <div className="p-4">
             <p className="px-3 pb-3 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#999489]">
               Gestion
             </p>
@@ -1351,7 +1563,7 @@ export const HotelierDashboardPage: React.FC<
 
         {/* CONTENT */}
 
-        <main className="min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+        <main className="min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain lg:px-8 lg:py-8">
           {isLoading ? (
             <LoadingState />
           ) : hotels.length ===
@@ -1438,11 +1650,13 @@ export const HotelierDashboardPage: React.FC<
                     selectedHotel={
                       selectedHotel
                     }
-                    onSelect={
-                      handleHotelChange
-                    }
+                    onSelect={openManageHotel}
                     onCreate={onAddLodging}
                   />
+                )}
+
+                {activeSection === 'legal' && (
+                  <HostLegalDocuments hotelId={selectedHotel.id} />
                 )}
 
                 {/* BOOKINGS */}
@@ -1461,15 +1675,14 @@ export const HotelierDashboardPage: React.FC<
                       handleUpdateBookingStatus
                     }
                     rooms={rooms}
-                    hotelId={selectedHotel.id}
                     manualReservations={manualReservations.filter(r => r.hotelId === selectedHotel.id)}
-                    onAddManual={(reservation) => setManualReservations(previous => [...previous, reservation])}
-                    onUpdateManual={(id, patch) => setManualReservations(previous => previous.map(r => r.id === id ? { ...r, ...patch } : r))}
+                    onAddManual={(reservation) => handleAddManualBooking(selectedHotel.id, reservation)}
+                    onUpdateManual={handleUpdateManualBooking}
                   />
                 )}
 
                 {activeSection === 'clients' && (
-                  <ClientsSection bookings={bookings} manualReservations={manualReservations.filter(r => r.hotelId === selectedHotel.id)} />
+                  <ClientsSection bookings={bookings.filter((booking) => booking.booking_source !== 'manual')} manualReservations={manualReservations.filter(r => r.hotelId === selectedHotel.id)} />
                 )}
 
                                 {/* ROOMS */}
@@ -1597,8 +1810,8 @@ export const HotelierDashboardPage: React.FC<
                     onReset={
                       resetLodgingDraft
                     }
-                    onSaveLocal={
-                      applyLodgingDraftLocally
+                    onSave={
+                      saveLodgingDraft
                     }
                     onOpenSupabaseModal={
                       onOpenSupabaseModal
@@ -1612,6 +1825,43 @@ export const HotelierDashboardPage: React.FC<
       </div>
 
       {/* ================================================================ */}
+       {managedHotel && (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0D241B]/70 p-3 backdrop-blur-sm" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !publicationBusy && !publicationConfirm) setManageHotelId(null); }}>
+           <section role="dialog" aria-modal="true" aria-label={`Gérer ${managedHotel.name}`} className="flex max-h-[93dvh] w-full max-w-3xl flex-col overflow-hidden rounded-[24px] bg-[#FAF9F6] shadow-2xl">
+             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#E9E2D5] bg-white px-5 py-4 sm:px-7">
+               <div><p className="text-[10px] font-bold uppercase tracking-widest text-[#967644]">Gestion de l'établissement</p><h2 className="mt-1 font-serif text-xl font-bold text-[#193E30]">{managedHotel.name}</h2></div>
+               <button type="button" disabled={publicationBusy} onClick={() => { setPublicationConfirm(null); setManageHotelId(null); }} className="rounded-xl border border-[#E9E2D5] px-4 py-2 text-xs font-bold">Fermer ×</button>
+             </div>
+             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6">
+               <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#E9E2D5] bg-white p-4"><Building2 size={21} className="text-[#284C3B]"/><span className="font-semibold text-[#284C3B]">{publicationStatusLabel(managedHotel)}</span><span className="text-xs text-[#647267]">{getCategoryLabel(managedHotel.category)} · {managedHotel.city}</span></div>
+               {publicationError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{publicationError}</div>}
+               {publicationNotice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{publicationNotice}</div>}
+               <div className="rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+                 <h3 className="font-bold text-[#193E30]">Contrôle avant publication</h3><p className="mt-1 text-xs text-[#647267]">La fiche doit être approuvée, juridiquement vérifiée et disposer de renseignements et d'une offre de séjour.</p>
+                 <div className="mt-4 grid gap-2 sm:grid-cols-2">{publicationChecks.map(check => <div key={check.label} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-xs font-semibold ${check.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>{check.ok ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>} {check.label}</div>)}</div>
+                 {publicationLegalLoading && <p className="mt-3 text-xs text-[#647267]">Vérification du dossier juridique…</p>}
+                 <div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => {setManageHotelId(null); changeSection('settings');}} className="rounded-xl border px-3 py-2 text-xs font-bold">Gérer la fiche</button><button type="button" onClick={() => {setManageHotelId(null); changeSection('rooms');}} className="rounded-xl border px-3 py-2 text-xs font-bold">Chambres & offres</button><button type="button" onClick={() => {setManageHotelId(null); changeSection('calendar');}} className="rounded-xl border px-3 py-2 text-xs font-bold">Calendrier</button><button type="button" onClick={() => {setManageHotelId(null); changeSection('legal');}} className="rounded-xl border px-3 py-2 text-xs font-bold">Dossier juridique</button></div>
+               </div>
+               <div className="rounded-2xl border border-[#E9E2D5] bg-white p-5">
+                 <h3 className="font-bold text-[#193E30]">Visibilité sur TerangaSN</h3>
+                 <p className="mt-2 text-sm leading-6 text-[#647267]">{managedStatus === 'published' ? 'Votre établissement est publié. Vous pouvez le retirer de la recherche publique sans annuler les réservations déjà confirmées.' : ['approved','unpublished'].includes(managedStatus) ? 'Votre établissement a reçu l’approbation administrative. Vous décidez quand le publier.' : 'La publication exige l’approbation administrative préalable.'}</p>
+                 <div className="mt-4 flex flex-wrap gap-3">{managedStatus === 'published' ? <button type="button" disabled={publicationBusy} onClick={() => setPublicationConfirm('unpublish')} className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-bold text-amber-900">Dépublier mon établissement</button> : <button type="button" disabled={!canPublishNow || publicationBusy} onClick={() => setPublicationConfirm('publish')} className="rounded-xl bg-[#193E30] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">Publier mon établissement</button>}</div>
+                 {managedStatus !== 'published' && !canPublishNow && <p className="mt-3 text-xs text-amber-900">Complétez les contrôles indiqués ci-dessus. Le serveur vérifie aussi l'autorisation avant de changer le statut.</p>}
+               </div>
+             </div>
+           </section>
+         </div>
+       )}
+       {managedHotel && publicationConfirm && (
+         <div className="fixed inset-0 z-[115] flex items-center justify-center bg-[#0D241B]/80 p-4" role="presentation">
+           <section role="alertdialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+             <h3 className="font-serif text-xl font-bold text-[#193E30]">{publicationConfirm === 'publish' ? 'Confirmer la publication ?' : 'Confirmer la dépublication ?'}</h3>
+             <p className="mt-3 text-sm text-[#647267]">{publicationConfirm === 'publish' ? 'Cet établissement deviendra visible dans la recherche publique après confirmation côté Supabase.' : 'Les nouvelles recherches ne proposeront plus cet établissement. Les réservations existantes ne sont pas annulées.'}</p>
+             <div className="mt-5 flex justify-end gap-3"><button type="button" disabled={publicationBusy} onClick={() => setPublicationConfirm(null)} className="rounded-xl border px-4 py-2.5 text-sm">Retour</button><button type="button" disabled={publicationBusy} onClick={() => void applyPublication()} className="rounded-xl bg-[#193E30] px-4 py-2.5 text-sm font-bold text-white">{publicationBusy ? 'En cours…' : 'Confirmer'}</button></div>
+           </section>
+         </div>
+       )}
+
       {/* CREATE ROOM MODAL                                                */}
       {/* ================================================================ */}
 
@@ -1816,8 +2066,8 @@ export const HotelierDashboardPage: React.FC<
             className="space-y-5"
           >
             <div className="rounded-xl border border-[#E9E2D5] bg-[#F7F5EF] p-4 text-xs leading-relaxed text-[#6F756D]">
-              Ces modifications sont temporaires côté frontend.
-              L’enregistrement Supabase sera branché pendant la passe backend.
+              Les modifications seront enregistrées dans Supabase.
+              Une réduction de capacité peut être refusée si elle entre en conflit avec des réservations existantes.
             </div>
 
             <FormField label="Nom de l’offre" required>
@@ -1964,7 +2214,7 @@ export const HotelierDashboardPage: React.FC<
               <button
                 type="button"
                 onClick={resetEditingRoomDraft}
-                disabled={!hasEditingRoomChanges}
+                disabled={!hasEditingRoomChanges || isSavingEditedRoom}
                 className="rounded-xl border border-[#E9E2D5] px-4 py-3 text-sm font-bold text-[#59645B] hover:bg-[#F7F5EF] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Réinitialiser
@@ -1974,6 +2224,7 @@ export const HotelierDashboardPage: React.FC<
                 <button
                   type="button"
                   onClick={closeRoomEditor}
+                  disabled={isSavingEditedRoom}
                   className="rounded-xl border border-[#E9E2D5] px-5 py-3 text-sm font-bold text-[#59645B] hover:bg-[#F7F5EF]"
                 >
                   Annuler
@@ -1981,10 +2232,10 @@ export const HotelierDashboardPage: React.FC<
 
                 <button
                   type="submit"
-                  disabled={!hasEditingRoomChanges}
+                  disabled={!hasEditingRoomChanges || isSavingEditedRoom}
                   className="rounded-xl bg-[#284C3B] px-5 py-3 text-sm font-bold text-white hover:bg-[#1B382D] disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Appliquer à l’aperçu
+                  {isSavingEditedRoom ? "Enregistrement…" : "Enregistrer dans Supabase"}
                 </button>
               </div>
             </div>
@@ -2031,7 +2282,7 @@ const OperationsWorkspace: React.FC<{rooms: RoomType[]}> = ({rooms}) => <div cla
 const ProWorkspace: React.FC<{title:string; description:string}> = ({title, description}) => <div className="space-y-5"><div><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">TerangaSN Manager · Pro</p><h2 className="mt-1 font-serif text-2xl font-bold text-[#284C3B]">{title}</h2></div><section className={managerPanel}><Sparkles className="text-[#B79B69]" size={28}/><h3 className="mt-4 text-lg font-bold">Fonction réservée à Pro / Enterprise</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-[#6F756D]">{description}</p><p className="mt-4 rounded-xl bg-[#F7F5EF] p-3 text-xs leading-5 text-[#6F756D]">L'abonnement actif n'est pas encore fourni par l'API. Cette fonction reste désactivée pour tous jusqu'à la vérification serveur ; aucun paiement ni changement de formule n'est simulé.</p></section></div>;
 
 const SubscriptionWorkspace: React.FC = () => <div className="space-y-5"><div><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">Offre commerciale</p><h2 className="mt-1 font-serif text-2xl font-bold text-[#284C3B]">Abonnement Manager</h2><p className="mt-2 text-sm text-[#6F756D]">Comparaison des formules. Le statut réel de votre abonnement sera affiché après connexion au service d'abonnements.</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Formule actuellement active : non vérifiée. Aucun privilège Pro n'est accordé depuis cette interface.</div><div className="grid gap-4 lg:grid-cols-3">{[
-{plan:'Standard', price:'Gratuit', details:['1 établissement', 'Chambres illimitées', 'Réservations manuelles', 'Calendrier et statistiques de base', '8 % TTC sur les réservations issues de la marketplace']},
+{plan:'Standard', price:'Gratuit', details:['1 établissement', 'Chambres illimitées', 'Réservations manuelles', 'Calendrier et statistiques de base', '12 % TTC sur les réservations issues de la marketplace']},
 {plan:'Pro', price:'39 900 FCFA TTC / mois', details:['3 établissements', 'Jusqu’à 5 collaborateurs', 'Statistiques et rapports avancés', '0 % de commission TerangaSN sur les réservations marketplace']},
 {plan:'Enterprise', price:'Sur devis', details:['Limites et permissions contractuelles', 'Fonctions multiétablissements avancées', 'Accompagnement et intégrations à définir']},
 ].map(item=><article key={item.plan} className={managerPanel}><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">{item.plan}</p><h3 className="mt-3 font-serif text-xl font-bold text-[#284C3B]">{item.price}</h3><ul className="mt-5 space-y-3">{item.details.map(detail=><li key={detail} className="flex items-start gap-2 text-sm text-[#59645B]"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#284C3B]"/>{detail}</li>)}</ul></article>)}</div><p className="text-xs leading-6 text-[#6F756D]">Sur toutes les formules, les réservations directes (téléphone, sur place, WhatsApp ou lien direct) ne supportent aucune commission TerangaSN. Des frais de prestataire de paiement peuvent s'appliquer séparément. Les limites devront être appliquées côté serveur.</p></div>;
@@ -2080,7 +2331,7 @@ const OverviewSection: React.FC<
   <div className="space-y-6">
     <DailyOperations bookings={bookings} onNavigate={onNavigate} />
     <div className="rounded-2xl border border-[#E9E2D5] bg-white px-5 py-4 text-xs leading-6 text-[#6F756D]">
-      <strong className="text-[#284C3B]">Vue d’ensemble :</strong> les chiffres ci-dessous concernent les réservations chargées depuis TerangaSN. Les réservations manuelles en aperçu ne sont pas comptabilisées et les montants confirmés ne signifient pas « encaissés ».
+      <strong className="text-[#284C3B]">Vue d’ensemble :</strong> les chiffres ci-dessous incluent les réservations TerangaSN et les saisies manuelles enregistrées. Les montants confirmés ne signifient pas « encaissés ».
     </div>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
@@ -2523,14 +2774,10 @@ const LodgingsSection: React.FC<
               <div className="mt-4 flex items-center justify-between border-t border-[#E9E2D5] pt-4">
                 <span
                   className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                    hotel.is_published
-                      ? 'bg-[#EFF3ED] text-[#284C3B]'
-                      : 'bg-[#FFF7E8] text-[#9A6700]'
+                    ['published', 'approved', 'unpublished'].includes(String(hotel.status)) ? 'bg-[#EFF3ED] text-[#284C3B]' : 'bg-[#FFF7E8] text-[#9A6700]'
                   }`}
                 >
-                  {hotel.is_published
-                    ? 'Publié'
-                    : 'En préparation'}
+                  {publicationStatusLabel(hotel)}
                 </span>
 
                 <span className="text-xs font-bold text-[#284C3B]">
@@ -2553,58 +2800,71 @@ interface BookingsSectionProps {
   bookings: Booking[];
   lodgingName: string;
   rooms: RoomType[];
-  hotelId: string;
   manualReservations: ManualReservation[];
-  onAddManual: (reservation: ManualReservation) => void;
-  onUpdateManual: (id: string, patch: Partial<ManualReservation>) => void;
+  onAddManual: (reservation: ManualReservationInput) => Promise<void>;
+  onUpdateManual: (id: string, patch: Partial<ManualReservation>) => Promise<void>;
   updatingBookingId: string | null;
   onUpdateStatus: (bookingId: string, status: 'confirmed' | 'cancelled' | 'completed') => Promise<void>;
 }
 const BookingsSection: React.FC<BookingsSectionProps> = ({
-  bookings, lodgingName, rooms, hotelId, manualReservations, onAddManual, onUpdateManual, onUpdateStatus, updatingBookingId,
+  bookings, lodgingName, rooms, manualReservations, onAddManual, onUpdateManual, onUpdateStatus, updatingBookingId,
 }) => {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [roomId, setRoomId] = useState('');
+  const [roomsCount, setRoomsCount] = useState(1);
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [source, setSource] = useState<ManualSource>('telephone');
   const [amount, setAmount] = useState('');
+  const [isSavingManual, setIsSavingManual] = useState(false);
   const [error, setError] = useState('');
   const [bookingSearch, setBookingSearch] = useState('');
   const [bookingStatusFilter, setBookingStatusFilter] = useState('all');
   const [bookingSort, setBookingSort] = useState('arrival');
   const [manualSearch, setManualSearch] = useState('');
   const normalizedSearch = bookingSearch.trim().toLocaleLowerCase('fr');
-  const visibleBookings = bookings.filter(b => {
+  const marketplaceBookings = bookings.filter(b => b.booking_source !== 'manual');
+  const visibleBookings = marketplaceBookings.filter(b => {
     const matchesStatus = bookingStatusFilter === 'all' || b.status === bookingStatusFilter;
     const matchesSearch = !normalizedSearch || [b.guest_name, b.guest_phone, b.guest_email, b.room_type?.name, b.id].some(v => String(v || '').toLocaleLowerCase('fr').includes(normalizedSearch));
     return matchesStatus && matchesSearch;
   }).sort((a, b) => bookingSort === 'amount' ? Number(b.total_price || 0) - Number(a.total_price || 0) : bookingSort === 'recent' ? String((b as Booking & { created_at?: string }).created_at || b.check_in).localeCompare(String((a as Booking & { created_at?: string }).created_at || a.check_in)) : String(a.check_in).localeCompare(String(b.check_in)));
   const visibleManual = manualReservations.filter(r => [r.guestName, r.guestPhone, manualSourceLabels[r.source]].some(v => v.toLocaleLowerCase('fr').includes(manualSearch.trim().toLocaleLowerCase('fr'))));
   const activeRoom = rooms.find(room => room.id === roomId);
-  const exportReservations = () => downloadCSV('reservations-terangasn-avec-apercus.csv', [
+  const exportReservations = () => downloadCSV('reservations-terangasn.csv', [
     ['Origine', 'Client', 'Téléphone', 'Arrivée', 'Départ', 'Offre', 'Montant FCFA', 'Statut', 'Paiement'],
-    ...bookings.map(b => ['TerangaSN', b.guest_name, b.guest_phone, b.check_in, b.check_out, b.room_type?.name || '', b.total_price, b.status, getPaymentStatusLabel(b.payment_status)]),
+    ...marketplaceBookings.map(b => ['TerangaSN', b.guest_name, b.guest_phone, b.check_in, b.check_out, b.room_type?.name || '', b.total_price, b.status, getPaymentStatusLabel(b.payment_status)]),
     ...manualReservations.map(r => [manualSourceLabels[r.source], r.guestName, r.guestPhone, r.checkIn, r.checkOut, rooms.find(room => room.id === r.roomId)?.name || '', r.amount, r.status, r.payment]),
   ]);
-  const addReservation = (event: React.FormEvent) => {
+  const addReservation = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
-    if (!name.trim() || !roomId || !checkIn || !checkOut || !Number.isFinite(Number(amount)) || Number(amount) < 0) {
-      setError('Renseignez le client, l’offre, les dates et un montant valide.'); return;
+    if (!name.trim() || !phone.trim() || !roomId || !checkIn || !checkOut || !Number.isInteger(roomsCount) || roomsCount < 1 || !Number.isFinite(Number(amount)) || Number(amount) < 0) {
+      setError('Renseignez le client, son téléphone, l’offre, la quantité, les dates et un montant valide.'); return;
     }
     if (checkIn >= checkOut) { setError('La date de départ doit être après la date d’arrivée.'); return; }
-    // Contrôle prudent : la quantité des offres est prise en compte. Les réservations
-    // de la plateforme sont uniquement comparées lorsque leur type de chambre est connu.
-    const overlappingManual = manualReservations.filter(r => r.roomId === roomId && r.status !== 'cancelled' && dateOverlap(checkIn, checkOut, r.checkIn, r.checkOut)).length;
-    const overlappingOnline = bookings.filter(b => (b as Booking & { room_type_id?: string }).room_type_id === roomId && (b.status === 'confirmed' || b.status === 'pending') && dateOverlap(checkIn, checkOut, b.check_in, b.check_out)).length;
-    if (overlappingManual + overlappingOnline >= (activeRoom?.total_rooms || 1)) {
-      setError('Capacité potentiellement atteinte sur ces dates. Vérifiez les disponibilités dans le calendrier.'); return;
+    setIsSavingManual(true);
+    try {
+      await onAddManual({
+        roomId,
+        guestName: name.trim(),
+        guestPhone: phone.trim(),
+        guestEmail: email,
+        checkIn,
+        checkOut,
+        roomsCount,
+        source,
+        amount: Number(amount),
+      });
+      setName(''); setPhone(''); setEmail(''); setRoomId(''); setRoomsCount(1); setCheckIn(''); setCheckOut(''); setAmount(''); setShowForm(false);
+    } catch (submissionError: any) {
+      setError(submissionError?.message || 'Impossible d’enregistrer la réservation. Vérifiez les disponibilités et réessayez.');
+    } finally {
+      setIsSavingManual(false);
     }
-    onAddManual({ id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, hotelId, roomId, guestName: name.trim(), guestPhone: phone.trim(), checkIn, checkOut, source, amount: Number(amount), status: 'confirmed', payment: 'unpaid' });
-    setName(''); setPhone(''); setRoomId(''); setCheckIn(''); setCheckOut(''); setAmount(''); setShowForm(false);
   };
   return <section className="space-y-5">
     <div className="flex flex-col gap-3 rounded-2xl border border-[#E9E2D5] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -2614,8 +2874,8 @@ const BookingsSection: React.FC<BookingsSectionProps> = ({
         <button type="button" onClick={() => setShowForm(v => !v)} className="inline-flex items-center gap-2 rounded-xl bg-[#284C3B] px-4 py-2.5 text-xs font-bold text-white"><PlusCircle size={15}/> Réservation manuelle</button>
       </div>
     </div>
-    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-relaxed text-amber-900">
-      <strong>Mode aperçu :</strong> les réservations manuelles sont conservées uniquement tant que cette page reste ouverte. Elles ne bloquent pas encore le calendrier Supabase et ne sont pas synchronisées entre appareils. Vérifiez toujours les disponibilités avant de confirmer.
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs leading-relaxed text-blue-900">
+      Les réservations en attente, confirmées et les saisies manuelles bloquent le stock pour les nuits concernées. Une annulation libère les chambres.
     </div>
     <div className="grid gap-3 rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_180px_170px]">
       <label className="flex items-center gap-2 rounded-xl border border-[#E9E2D5] px-3"><Search size={16} className="text-[#6F756D]"/><input aria-label="Rechercher une réservation" value={bookingSearch} onChange={e => setBookingSearch(e.target.value)} placeholder="Client, téléphone, offre, référence…" className="w-full min-w-0 bg-transparent py-3 text-sm outline-none"/></label>
@@ -2626,24 +2886,26 @@ const BookingsSection: React.FC<BookingsSectionProps> = ({
       <h3 className="font-bold">Nouvelle réservation hors marketplace</h3>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <FormField label="Nom du client" required><FormInput value={name} onChange={e => setName(e.target.value)} required /></FormField>
-        <FormField label="Téléphone"><FormInput value={phone} onChange={e => setPhone(e.target.value)} placeholder="+221 ..." /></FormField>
+        <FormField label="Téléphone" required><FormInput value={phone} onChange={e => setPhone(e.target.value)} placeholder="+221 ..." required /></FormField>
+        <FormField label="E-mail (facultatif)"><FormInput type="email" value={email} onChange={e => setEmail(e.target.value)} /></FormField>
         <FormField label="Canal"><select className="w-full rounded-xl border border-[#E9E2D5] bg-white px-3 py-3 text-sm" value={source} onChange={e => setSource(e.target.value as ManualSource)}>{(Object.keys(manualSourceLabels) as ManualSource[]).map(key => <option key={key} value={key}>{manualSourceLabels[key]}</option>)}</select></FormField>
         <FormField label="Chambre / offre" required><select required className="w-full rounded-xl border border-[#E9E2D5] bg-white px-3 py-3 text-sm" value={roomId} onChange={e => setRoomId(e.target.value)}><option value="">Choisir une offre</option>{rooms.map(room => <option key={room.id} value={room.id}>{room.name} ({room.total_rooms} unité(s))</option>)}</select></FormField>
+        <FormField label="Nombre de chambres" required><FormInput type="number" min={1} max={activeRoom?.total_rooms || 1} value={roomsCount} onChange={e => setRoomsCount(Number(e.target.value))} required /></FormField>
         <FormField label="Arrivée" required><FormInput type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} required /></FormField>
         <FormField label="Départ" required><FormInput type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} required /></FormField>
         <FormField label="Montant total (FCFA)" required><FormInput type="number" min={0} value={amount} onChange={e => setAmount(e.target.value)} required /></FormField>
       </div>
       {error && <p role="alert" className="text-sm font-semibold text-rose-700">{error}</p>}
-      <div className="flex flex-wrap gap-2"><button type="submit" className="rounded-xl bg-[#284C3B] px-5 py-3 text-sm font-bold text-white">Ajouter à l’aperçu</button><button type="button" onClick={() => setShowForm(false)} className="rounded-xl border px-5 py-3 text-sm">Fermer</button></div>
+      <div className="flex flex-wrap gap-2"><button type="submit" disabled={isSavingManual} className="rounded-xl bg-[#284C3B] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{isSavingManual ? 'Enregistrement…' : 'Enregistrer la réservation'}</button><button type="button" onClick={() => setShowForm(false)} className="rounded-xl border px-5 py-3 text-sm">Fermer</button></div>
     </form>}
     <div className="overflow-hidden rounded-2xl border border-[#E9E2D5] bg-white">
-      <SectionHeader title={`Marketplace (${visibleBookings.length}/${bookings.length})`} description="Réservations réellement chargées depuis la plateforme. Confirmer ne signifie pas encaisser." />
+      <SectionHeader title={`Marketplace (${visibleBookings.length}/${marketplaceBookings.length})`} description="Demandes reçues via TerangaSN. Confirmer ne signifie pas encaisser." />
       {visibleBookings.length === 0 ? <SimpleEmptyState icon={Calendar} title="Aucune réservation correspondante" description="Les demandes apparaîtront ici." /> : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-xs"><thead className="bg-[#F7F5EF] text-[#6F756D]"><tr>{['Client', 'Séjour', 'Offre', 'Montant', 'Paiement', 'Statut', 'Actions'].map(h => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody className="divide-y divide-[#E9E2D5]">{visibleBookings.map(b => <tr key={b.id}><td className="px-4 py-4"><strong>{b.guest_name}</strong><p className="text-[#6F756D]">{b.guest_phone || b.guest_email}</p></td><td className="px-4 py-4">{formatDate(b.check_in)} → {formatDate(b.check_out)}</td><td className="px-4 py-4">{b.room_type?.name || 'Offre'}</td><td className="px-4 py-4 font-bold">{formatFCFA(b.total_price)}</td><td className="px-4 py-4">{getPaymentStatusLabel(b.payment_status)}</td><td className="px-4 py-4"><StatusBadge status={b.status}/></td><td className="px-4 py-4"><div className="flex gap-2">{b.status === 'pending' && <button type="button" disabled={updatingBookingId !== null} className="rounded-lg disabled:opacity-50 bg-[#284C3B] px-3 py-2 font-bold text-white" onClick={() => void onUpdateStatus(b.id, 'confirmed')}>Confirmer</button>}{b.status === 'confirmed' && <button type="button" disabled={updatingBookingId !== null} className="rounded-lg disabled:opacity-50 border px-3 py-2" onClick={() => void onUpdateStatus(b.id, 'completed')}>Terminer</button>}{(b.status === 'pending' || b.status === 'confirmed') && <button type="button" disabled={updatingBookingId !== null} className="rounded-lg disabled:opacity-50 border px-3 py-2 text-rose-700" onClick={() => { if (window.confirm('Annuler cette réservation ?')) void onUpdateStatus(b.id, 'cancelled'); }}>Annuler</button>}</div></td></tr>)}</tbody></table></div>}
     </div>
     <div className="overflow-hidden rounded-2xl border border-[#E9E2D5] bg-white">
       <div className="border-b border-[#E9E2D5] p-4"><label className="flex max-w-md items-center gap-2 rounded-xl border border-[#E9E2D5] px-3"><Search size={16}/><input aria-label="Rechercher une saisie manuelle" value={manualSearch} onChange={e => setManualSearch(e.target.value)} placeholder="Rechercher une saisie manuelle" className="w-full min-w-0 py-3 text-sm outline-none"/></label></div>
-      <SectionHeader title={`Réservations manuelles (${manualReservations.length})`} description="Saisie locale : WhatsApp, téléphone, accueil ou autre. Commission TerangaSN non calculée." />
-      {visibleManual.length === 0 ? <SimpleEmptyState icon={Phone} title="Aucune saisie manuelle" description="Ajoutez une réservation reçue en dehors de TerangaSN."/> : <div className="overflow-x-auto"><table className="w-full min-w-[750px] text-left text-xs"><thead className="bg-[#F7F5EF]"><tr>{['Client', 'Canal', 'Dates', 'Offre', 'Montant', 'Paiement', 'Actions'].map(h => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody className="divide-y divide-[#E9E2D5]">{visibleManual.map(r => <tr key={r.id} className={r.status === 'cancelled' ? 'opacity-50' : ''}><td className="px-4 py-4"><strong>{r.guestName}</strong><p>{r.guestPhone}</p></td><td className="px-4 py-4">{manualSourceLabels[r.source]}</td><td className="px-4 py-4">{formatDate(r.checkIn)} → {formatDate(r.checkOut)}</td><td className="px-4 py-4">{rooms.find(room => room.id === r.roomId)?.name || '—'}</td><td className="px-4 py-4 font-bold">{formatFCFA(r.amount)}</td><td className="px-4 py-4">{r.payment === 'paid' ? 'Payé (aperçu)' : 'Non payé'}</td><td className="px-4 py-4"><div className="flex gap-2">{r.status !== 'cancelled' && <><button type="button" className="rounded-lg border px-3 py-2" onClick={() => onUpdateManual(r.id, { payment: r.payment === 'paid' ? 'unpaid' : 'paid' })}>{r.payment === 'paid' ? 'Annuler paiement' : 'Marquer payé'}</button><button type="button" className="rounded-lg border px-3 py-2 text-rose-700" onClick={() => onUpdateManual(r.id, { status: 'cancelled' })}>Annuler</button></>}</div></td></tr>)}</tbody></table></div>}
+      <SectionHeader title={`Réservations manuelles (${manualReservations.length})`} description="Réservations enregistrées et synchronisées avec le stock. Commission TerangaSN non calculée." />
+      {visibleManual.length === 0 ? <SimpleEmptyState icon={Phone} title="Aucune saisie manuelle" description="Ajoutez une réservation reçue en dehors de TerangaSN."/> : <div className="overflow-x-auto"><table className="w-full min-w-[750px] text-left text-xs"><thead className="bg-[#F7F5EF]"><tr>{['Client', 'Canal', 'Dates', 'Offre', 'Montant', 'Paiement', 'Actions'].map(h => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody className="divide-y divide-[#E9E2D5]">{visibleManual.map(r => <tr key={r.id} className={r.status === 'cancelled' ? 'opacity-50' : ''}><td className="px-4 py-4"><strong>{r.guestName}</strong><p>{r.guestPhone}</p></td><td className="px-4 py-4">{manualSourceLabels[r.source]}</td><td className="px-4 py-4">{formatDate(r.checkIn)} → {formatDate(r.checkOut)}</td><td className="px-4 py-4">{rooms.find(room => room.id === r.roomId)?.name || '—'}</td><td className="px-4 py-4 font-bold">{formatFCFA(r.amount)}</td><td className="px-4 py-4">{r.payment === 'paid' ? 'Payé' : 'Non payé'}</td><td className="px-4 py-4"><div className="flex gap-2">{r.status !== 'cancelled' && r.status !== 'completed' && <><button type="button" disabled={updatingBookingId !== null} className="rounded-lg border px-3 py-2 disabled:opacity-50" onClick={() => void onUpdateManual(r.id, { payment: r.payment === 'paid' ? 'unpaid' : 'paid' })}>{r.payment === 'paid' ? 'Annuler paiement' : 'Marquer payé'}</button><button type="button" disabled={updatingBookingId !== null} className="rounded-lg border px-3 py-2 text-rose-700 disabled:opacity-50" onClick={() => void onUpdateManual(r.id, { status: 'cancelled' })}>Annuler</button></>}</div></td></tr>)}</tbody></table></div>}
     </div>
   </section>;
 };
@@ -3261,7 +3523,7 @@ interface SettingsSectionProps {
     value: any
   ) => void;
   onReset: () => void;
-  onSaveLocal: () => void;
+  onSave: (overrides?: Partial<Lodging>) => Promise<void>;
   onOpenSupabaseModal: () => void;
 }
 
@@ -3274,38 +3536,76 @@ const SettingsSection: React.FC<
   hasChanges,
   onChange,
   onReset,
-  onSaveLocal,
+  onSave,
   onOpenSupabaseModal,
 }) => {
   const current = draft || lodging;
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const [photoError, setPhotoError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const photos =
     current.photos || [];
 
   const amenities =
     current.amenities || [];
+  const [amenitiesInput, setAmenitiesInput] = useState(amenities.join(', '));
 
-  const updatePhoto = (
-    index: number,
-    value: string
-  ) => {
-    const next = [...photos];
-    next[index] = value;
+  useEffect(() => {
+    setAmenitiesInput(amenities.join(', '));
+  }, [lodging.id, amenities.join('\u0000')]);
 
-    onChange(
-      'photos',
-      next.filter(
-        (photo) =>
-          photo.trim().length > 0
-      )
-    );
+  const uploadPhotos = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!files.length) return;
+
+    setUploadingPhotos(true);
+    setPhotoError('');
+    const uploadedUrls: string[] = [];
+    const failures: string[] = [];
+    try {
+      for (const [index, file] of files.entries()) {
+        setUploadProgress(`Envoi de ${index + 1}/${files.length} : ${file.name}`);
+        const result = await uploadHotelPhoto(file, lodging.id);
+        if (result.error || !result.url) {
+          failures.push(`${file.name} : ${result.error?.message || 'Échec de l’envoi.'}`);
+        } else {
+          uploadedUrls.push(result.url);
+        }
+      }
+      if (uploadedUrls.length) {
+        onChange('photos', [...photos, ...uploadedUrls]);
+      }
+      if (failures.length) setPhotoError(failures.join(' '));
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : 'Une erreur est survenue pendant l’envoi des images.');
+    } finally {
+      setUploadingPhotos(false);
+      setUploadProgress('');
+    }
   };
 
-  const addPhoto = () => {
-    onChange('photos', [
-      ...photos,
-      '',
-    ]);
+  const parseAmenities = (value: string) => Array.from(
+    new Set(value.split(/[,\n]/).map(item => item.trim()).filter(Boolean))
+  );
+
+  const saveChanges = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const savedAmenities = parseAmenities(amenitiesInput);
+      onChange('amenities', savedAmenities);
+      await onSave({ amenities: savedAmenities });
+      setAmenitiesInput(savedAmenities.join(', '));
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Impossible d’enregistrer la fiche.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const removePhoto = (
@@ -3320,15 +3620,12 @@ const SettingsSection: React.FC<
     );
   };
 
-  const amenitiesText =
-    amenities.join(', ');
-
   return (
     <section className="space-y-6">
       <div className="rounded-2xl border border-[#E9E2D5] bg-white">
         <SectionHeader
           title="Gérer la fiche"
-          description="Préparez les informations visibles de votre établissement. Pour le moment, les modifications restent côté frontend et ne sont pas encore enregistrées dans Supabase."
+          description="Modifiez les informations de votre établissement et enregistrez-les directement sur TerangaSN."
         />
 
         <div className="space-y-8 p-5 sm:p-6">
@@ -3529,22 +3826,32 @@ const SettingsSection: React.FC<
                 </p>
 
                 <p className="mt-1 text-xs text-[#6F756D]">
-                  Les URL sont temporaires en attendant le stockage des fichiers.
+                  Importez des images JPEG, PNG ou WebP (10 Mo maximum par image).
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={addPhoto}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#D8D4C8] px-4 py-2.5 text-xs font-bold text-[#284C3B] hover:bg-[#F7F5EF]"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={uploadingPhotos}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#D8D4C8] px-4 py-2.5 text-xs font-bold text-[#284C3B] hover:bg-[#F7F5EF] disabled:opacity-50"
               >
-                <PlusCircle
-                  size={14}
-                />
-                Ajouter une photo
+                {uploadingPhotos ? <Loader2 size={14} className="animate-spin" /> : <PlusCircle size={14} />}
+                {uploadingPhotos ? 'Envoi en cours…' : 'Choisir des photos'}
               </button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                className="sr-only"
+                aria-label="Choisir des photos depuis votre appareil"
+                onChange={event => void uploadPhotos(event)}
+              />
             </div>
 
+            {uploadProgress && <p role="status" className="mt-3 text-xs text-[#284C3B]">{uploadProgress}</p>}
+            {photoError && <p role="alert" className="mt-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-800">{photoError}</p>}
             <div className="mt-4 space-y-3">
               {photos.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#D8D4C8] bg-[#F7F5EF] p-5 text-center text-xs text-[#6F756D]">
@@ -3555,31 +3862,20 @@ const SettingsSection: React.FC<
                   (photo, index) => (
                     <div
                       key={`${index}-${photo}`}
-                      className="flex gap-2"
+                      className="flex items-center gap-3 rounded-xl border border-[#E9E2D5] bg-white p-2"
                     >
-                      <FormInput
-                        type="url"
-                        value={photo}
-                        onChange={(
-                          event
-                        ) =>
-                          updatePhoto(
-                            index,
-                            event.target
-                              .value
-                          )
-                        }
-                        placeholder="https://..."
-                      />
+                      <img src={photo} alt={`Photo ${index + 1} de ${current.name || lodging.name}`} className="h-16 w-20 shrink-0 rounded-lg bg-[#F7F5EF] object-cover" />
+                      <span className="min-w-0 flex-1 truncate text-xs text-[#6F756D]">{`Photo ${index + 1}`}</span>
 
                       <button
                         type="button"
+                        disabled={uploadingPhotos}
                         onClick={() =>
                           removePhoto(
                             index
                           )
                         }
-                        className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border border-[#E9E2D5] text-[#6F756D] hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E9E2D5] text-[#6F756D] hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
                         aria-label="Supprimer la photo"
                       >
                         <X
@@ -3601,25 +3897,18 @@ const SettingsSection: React.FC<
             <div className="mt-4">
               <FormField
                 label="Équipements"
-                hint="Séparez les éléments par des virgules."
+                hint="Séparez les éléments par une virgule ou placez-en un par ligne."
               >
-                <FormInput
-                  value={
-                    amenitiesText
-                  }
-                  onChange={(event) =>
-                    onChange(
-                      'amenities',
-                      event.target.value
-                        .split(',')
-                        .map(
-                          (item) =>
-                            item.trim()
-                        )
-                        .filter(Boolean)
-                    )
-                  }
-                  placeholder="wifi, climatisation, piscine..."
+                <textarea
+                  value={amenitiesInput}
+                  onChange={event => {
+                    setAmenitiesInput(event.target.value);
+                    onChange('amenities', amenities);
+                  }}
+                  onBlur={() => onChange('amenities', parseAmenities(amenitiesInput))}
+                  rows={4}
+                  className="w-full resize-y rounded-xl border border-[#DCD8CC] bg-white px-4 py-3 text-sm leading-relaxed outline-none transition placeholder:text-[#AAA69C] focus:border-[#284C3B] focus:ring-2 focus:ring-[#284C3B]/10"
+                  placeholder={'Wi-Fi\nClimatisation\nPiscine'}
                 />
               </FormField>
             </div>
@@ -3704,15 +3993,16 @@ const SettingsSection: React.FC<
           <div className="flex flex-col gap-3 border-t border-[#E9E2D5] pt-6 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-[#6F756D]">
               {hasChanges
-                ? 'Modifications locales non appliquées.'
-                : 'Aucune modification locale en attente.'}
+                ? 'Modifications non enregistrées.'
+                : 'Toutes les modifications sont enregistrées.'}
             </p>
+            {saveError && <p role="alert" className="text-xs text-rose-800">{saveError}</p>}
 
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <button
                 type="button"
                 onClick={onReset}
-                disabled={!hasChanges}
+                disabled={!hasChanges || saving || uploadingPhotos}
                 className="rounded-xl border border-[#E9E2D5] px-4 py-2.5 text-xs font-bold text-[#59645B] hover:bg-[#F7F5EF] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Annuler les modifications
@@ -3720,11 +4010,11 @@ const SettingsSection: React.FC<
 
               <button
                 type="button"
-                onClick={onSaveLocal}
-                disabled={!hasChanges}
+                onClick={() => void saveChanges()}
+                disabled={!hasChanges || saving || uploadingPhotos}
                 className="rounded-xl bg-[#284C3B] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#1B382D] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Appliquer à l’aperçu
+                {saving ? 'Enregistrement…' : 'Enregistrer la fiche'}
               </button>
             </div>
           </div>
@@ -3818,14 +4108,10 @@ const LodgingContextCard: React.FC<
 
             <span
               className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                lodging.is_published
-                  ? 'bg-[#EFF3ED] text-[#284C3B]'
-                  : 'bg-[#FFF7E8] text-[#9A6700]'
+                ['published', 'approved', 'unpublished'].includes(String(lodging.status)) ? 'bg-[#EFF3ED] text-[#284C3B]' : 'bg-[#FFF7E8] text-[#9A6700]'
               }`}
             >
-              {lodging.is_published
-                ? 'Publié'
-                : 'En préparation'}
+              {publicationStatusLabel(lodging)}
             </span>
           </div>
 
@@ -4315,5 +4601,450 @@ const ModalActions: React.FC<
     </button>
   </div>
 );
+
+
+// Les justificatifs sont privés : jamais de lien public ni de stockage local persistant.
+type LegalRelationship = 'owner' | 'authorized_tenant' | 'mandate_manager' | 'company_representative' | 'family_representative' | 'estate_representative' | 'other';
+type LegalDossier = { id: string; relationship_type: LegalRelationship; relationship_details: string | null; status: string; review_note: string | null };
+type LegalRequirement = { document_type: string; label_fr: string; guidance_fr: string | null; is_required: boolean };
+type LegalDocument = { id: string; document_type: string; original_filename: string | null; storage_path: string; status: string; review_note: string | null; created_at: string; document_reference: string | null; document_valid_until: string | null; document_notes: string | null };
+const LEGAL_RELATIONSHIPS: { value: LegalRelationship; label: string }[] = [
+  { value: 'owner', label: 'Propriétaire' },
+  { value: 'authorized_tenant', label: 'Locataire autorisé' },
+  { value: 'mandate_manager', label: 'Gestionnaire mandaté' },
+  { value: 'company_representative', label: 'Représentant d’une société' },
+  { value: 'family_representative', label: 'Représentant familial' },
+  { value: 'estate_representative', label: 'Représentant d’une succession' },
+  { value: 'other', label: 'Autre situation' },
+];
+const LEGAL_STATUSES: Record<string, string> = {
+  draft: 'Brouillon', submitted: 'Soumis', under_review: 'En cours d’examen',
+  changes_requested: 'Corrections demandées', verified: 'Vérifié', rejected: 'Refusé',
+};
+const MAX_LEGAL_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_LEGAL_MIME = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+const HostLegalDocuments: React.FC<{ hotelId: string }> = ({ hotelId }) => {
+  const [dossier, setDossier] = useState<LegalDossier | null>(null);
+  const [requirements, setRequirements] = useState<LegalRequirement[]>([]);
+  const [documents, setDocuments] = useState<LegalDocument[]>([]);
+  const [relationship, setRelationship] = useState<LegalRelationship>('owner');
+  const [details, setDetails] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ kind: 'withdraw' } | { kind: 'delete'; document: LegalDocument } | null>(null);
+  // Galerie privée : toutes les pièces d'une même catégorie, sans nouvel onglet.
+  const [galleryType, setGalleryType] = useState<string | null>(null);
+  const [galleryUrls, setGalleryUrls] = useState<Record<string, string>>({});
+  const [galleryLoading, setGalleryLoading] = useState(false);
+  const [galleryError, setGalleryError] = useState('');
+  const [gallerySelectedId, setGallerySelectedId] = useState<string | null>(null);
+
+  const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const legalFileRef = useRef<HTMLInputElement | null>(null);
+  const uploadTargetRef = useRef<string>('');
+  const [expandedMetadata, setExpandedMetadata] = useState<string | null>(null);
+  const [showLegalProfile, setShowLegalProfile] = useState(false);
+  const [showLegalHistory, setShowLegalHistory] = useState<Record<string, boolean>>({});
+  const [documentMetadata, setDocumentMetadata] = useState<Record<string, { reference: string; validUntil: string; notes: string }>>({});
+  const updateDocumentMetadata = (type: string, patch: Partial<{ reference: string; validUntil: string; notes: string }>) => {
+    setDocumentMetadata(previous => {
+      const defaults = { reference: '', validUntil: '', notes: '' };
+      return { ...previous, [type]: { ...defaults, ...previous[type], ...patch } };
+    });
+  };
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const editable = !dossier || ['draft', 'changes_requested', 'rejected'].includes(dossier.status);
+
+  const refresh = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data: d, error: de } = await supabase.from('hotel_legal_dossiers')
+        .select('id, relationship_type, relationship_details, status, review_note')
+        .eq('hotel_id', hotelId).maybeSingle();
+      if (de) throw de;
+      const current = (d || null) as LegalDossier | null;
+      setDossier(current);
+      const rel = current?.relationship_type || 'owner';
+      setRelationship(rel);
+      setDetails(current?.relationship_details || '');
+      const [r, docs] = await Promise.all([
+        supabase.from('legal_document_requirements').select('document_type,label_fr,guidance_fr,is_required')
+          .eq('relationship_type', rel).eq('is_active', true),
+        current ? supabase.from('hotel_documents')
+          .select('id,document_type,original_filename,storage_path,status,review_note,created_at,document_reference,document_valid_until,document_notes')
+          .eq('dossier_id', current.id).order('created_at', { ascending: false })
+          : Promise.resolve({ data: [] as LegalDocument[], error: null }),
+      ]);
+      if (r.error) throw r.error;
+      if (docs.error) throw docs.error;
+      setRequirements((r.data || []) as LegalRequirement[]);
+      setDocuments((docs.data || []) as LegalDocument[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Impossible de charger le dossier juridique.');
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { void refresh(); }, [hotelId]);
+
+  const loadRequirements = async (rel: LegalRelationship) => {
+    setRelationship(rel);
+    setError('');
+    const { data, error: e } = await supabase.from('legal_document_requirements')
+      .select('document_type,label_fr,guidance_fr,is_required')
+      .eq('relationship_type', rel).eq('is_active', true);
+    if (e) setError(e.message);
+    else setRequirements((data || []) as LegalRequirement[]);
+  };
+
+  const saveDossier = async (): Promise<LegalDossier | null> => {
+    const payload = { relationship_type: relationship, relationship_details: details.trim() || null };
+    const result = dossier
+      ? await supabase.from('hotel_legal_dossiers').update(payload).eq('id', dossier.id)
+        .select('id,relationship_type,relationship_details,status,review_note').single()
+      : await supabase.from('hotel_legal_dossiers').insert({ hotel_id: hotelId, ...payload })
+        .select('id,relationship_type,relationship_details,status,review_note').single();
+    if (result.error) throw result.error;
+    const saved = result.data as LegalDossier;
+    setDossier(saved);
+    return saved;
+  };
+  const handleSave = async () => {
+    setBusy(true); setError(''); setMessage('');
+    try { await saveDossier(); setMessage('Profil juridique enregistré.'); await refresh(); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Enregistrement impossible.'); }
+    finally { setBusy(false); }
+  };
+  const uploadDocument = async (documentType: string, file: File | undefined) => {
+    if (!file || !editable) return;
+    if (!ALLOWED_LEGAL_MIME.includes(file.type)) { setError('Format accepté : PDF, JPEG, PNG ou WebP.'); return; }
+    if (file.size > MAX_LEGAL_FILE_SIZE) { setError('Le fichier ne doit pas dépasser 10 Mo.'); return; }
+    if (!dossier) { setError('Enregistrez d’abord votre profil juridique.'); return; }
+    if (relationship !== dossier.relationship_type || details.trim() !== (dossier.relationship_details || '')) {
+      setError('Enregistrez d’abord les modifications du profil juridique.'); return;
+    }
+    setUploadingType(documentType); setError(''); setMessage('');
+    try {
+      const metadata = documentMetadata[documentType] || { reference: '', validUntil: '', notes: '' };
+      if (metadata.reference.length > 200 || metadata.notes.length > 1500) throw new Error('Référence ou observations trop longues.');
+      const documentId = crypto.randomUUID();
+      const extension = file.type === 'application/pdf' ? 'pdf' : file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const storagePath = `${dossier.id}/${documentId}/justificatif.${extension}`;
+      const uploaded = await supabase.storage.from('hotel-legal-documents').upload(storagePath, file, { contentType: file.type, upsert: false });
+      if (uploaded.error) throw uploaded.error;
+      const { error: insertError } = await supabase.from('hotel_documents').insert({
+        id: documentId, dossier_id: dossier.id, document_type: documentType,
+        storage_path: storagePath, original_filename: file.name, mime_type: file.type,
+        document_reference: metadata.reference.trim() || null,
+        document_valid_until: metadata.validUntil || null,
+        document_notes: metadata.notes.trim() || null,
+      });
+      if (insertError) throw new Error(`${insertError.message}. Le fichier a été envoyé, mais son enregistrement a échoué : contactez l’assistance.`);
+      setDocumentMetadata(previous => ({ ...previous, [documentType]: { reference: '', validUntil: '', notes: '' } }));
+      setMessage('Justificatif envoyé avec ses informations.');
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Échec de l’envoi.'); }
+    finally { setUploadingType(null); }
+  };
+  const showGallery = (documentType: string) => {
+    const matches = documents.filter(d => d.document_type === documentType);
+    setGalleryType(documentType);
+    setGallerySelectedId(matches[0]?.id || null);
+    setGalleryError('');
+    setGalleryUrls({});
+  };
+
+  // Des URL signées temporaires, uniquement pendant l'affichage de la galerie.
+  // Pas de lien public ni de mise en cache permanente des justificatifs privés.
+  useEffect(() => {
+    if (!galleryType) return;
+    const matches = documents.filter(d => d.document_type === galleryType);
+    let cancelled = false;
+    setGalleryLoading(true);
+    setGalleryError('');
+    void (async () => {
+      try {
+        const results = await Promise.all(matches.map(async doc => {
+          const { data, error: signedError } = await supabase.storage
+            .from('hotel-legal-documents').createSignedUrl(doc.storage_path, 300);
+          return { id: doc.id, url: data?.signedUrl || '', error: signedError };
+        }));
+        if (cancelled) return;
+        setGalleryUrls(Object.fromEntries(results.filter(r => r.url).map(r => [r.id, r.url])));
+        if (results.some(r => r.error || !r.url)) {
+          setGalleryError('Certains fichiers ne sont pas accessibles. Réessayez ou vérifiez les autorisations de stockage.');
+        }
+      } catch (e) {
+        if (!cancelled) setGalleryError(e instanceof Error ? e.message : 'Impossible de charger les documents.');
+      } finally {
+        if (!cancelled) setGalleryLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [galleryType, documents]);
+
+  const galleryDocuments = galleryType ? documents.filter(d => d.document_type === galleryType) : [];
+  const gallerySelected = galleryDocuments.find(d => d.id === gallerySelectedId) || galleryDocuments[0];
+  const isPdf = (doc: LegalDocument) => /\.pdf(?:$|\?)/i.test(doc.storage_path) || /\.pdf$/i.test(doc.original_filename || '');
+  const handleWithdraw = async () => {
+    if (!dossier || dossier.status !== 'submitted' || busy) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const { data, error: e } = await supabase.from('hotel_legal_dossiers')
+        .update({ status: 'draft' }).eq('id', dossier.id).eq('status', 'submitted')
+        .select('id').maybeSingle();
+      if (e) throw e;
+      if (!data) throw new Error('Le dossier a change de statut. Actualisez la page.');
+      await refresh();
+      setMessage('Soumission retiree. Vos documents sont conserves ; vous pouvez completer puis soumettre a nouveau.');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Retrait impossible.'); }
+    finally { setBusy(false); }
+  };
+  const handleDeleteDocument = async (document: LegalDocument) => {
+    if (!dossier || !editable || document.status !== 'pending' || busy || uploadingType) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      // Supprimer le fichier en premier : la politique Storage exige encore une ligne en base.
+      const { error: storageError } = await supabase.storage.from('hotel-legal-documents').remove([document.storage_path]);
+      if (storageError) throw storageError;
+      const { data, error: dbError } = await supabase.from('hotel_documents')
+        .delete().eq('id', document.id).eq('dossier_id', dossier.id).eq('status', 'pending')
+        .select('id');
+      if (dbError) throw dbError;
+      if (!data?.length) throw new Error('Le document n’a pas pu être supprimé de la base. Contactez l’assistance.');
+      await refresh();
+      setMessage('Justificatif supprimé. Vous pouvez en ajouter un autre.');
+    } catch (e) {
+      setError((e instanceof Error ? e.message : 'Suppression impossible.') + ' Si le fichier n’est plus accessible, contactez l’assistance.');
+      await refresh();
+    } finally { setBusy(false); }
+  };
+  const confirmLegalAction = async () => {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (!action) return;
+    if (action.kind === 'withdraw') await handleWithdraw();
+    else await handleDeleteDocument(action.document);
+  };
+  const missing = requirements.filter(r => r.is_required && !documents.some(d => d.document_type === r.document_type && d.status !== 'rejected'));
+  const handleSubmit = async () => {
+    if (!dossier || missing.length || !requirements.length || !editable) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      if (relationship !== dossier.relationship_type || details.trim() !== (dossier.relationship_details || '')) {
+        throw new Error('Enregistrez d’abord les modifications du profil juridique.');
+      }
+      const { error: e } = await supabase.from('hotel_legal_dossiers').update({ status: 'submitted' }).eq('id', dossier.id);
+      if (e) throw e;
+      setMessage('Dossier soumis à vérification.'); await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Soumission impossible.'); }
+    finally { setBusy(false); }
+  };
+
+  const getRequirementState = (requirement: LegalRequirement) => {
+    const matches = documents.filter(d => d.document_type === requirement.document_type);
+    const verified = matches.find(d => d.status === 'verified');
+    const pending = matches.find(d => d.status === 'pending');
+    const rejected = matches.find(d => d.status === 'rejected');
+    // A valid verified file satisfies the requirement even if an older file was rejected.
+    if (verified) return { priority: 3, status: 'verified' as const, primary: verified, matches };
+    if (pending) return { priority: 2, status: 'pending' as const, primary: pending, matches };
+    if (rejected) return { priority: 0, status: 'rejected' as const, primary: rejected, matches };
+    return { priority: 1, status: 'missing' as const, primary: null, matches };
+  };
+  const orderedRequirements = [...requirements].sort((a, b) => getRequirementState(a).priority - getRequirementState(b).priority);
+  const correctionCount = requirements.filter(r => ['rejected', 'missing'].includes(getRequirementState(r).status) && r.is_required).length;
+  const inReviewCount = requirements.filter(r => getRequirementState(r).status === 'pending').length;
+  const verifiedCount = requirements.filter(r => getRequirementState(r).status === 'verified').length;
+  const beginUpload = (documentType: string) => {
+    if (!editable || !dossier || busy || !!uploadingType) return;
+    uploadTargetRef.current = documentType;
+    legalFileRef.current?.click();
+  };
+
+  return <section className="space-y-5 rounded-2xl border border-[#E8E1D4] bg-white p-4 sm:p-7">
+    <input ref={legalFileRef} type="file" className="hidden" tabIndex={-1}
+      accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
+      onChange={e => { const file = e.currentTarget.files?.[0]; const type = uploadTargetRef.current; e.currentTarget.value = ''; if (type && file) void uploadDocument(type, file); }} />
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><p className="text-[11px] font-bold uppercase tracking-widest text-[#8B734D]">Vérification de l'établissement</p>
+        <h2 className="mt-1 font-serif text-2xl font-bold text-[#263F35]">Mon dossier juridique</h2>
+        <p className="mt-1 text-sm text-[#69665E]">Chaque pièce a son propre statut. Vos documents restent privés.</p></div>
+      <span className={`rounded-full border px-3 py-2 text-xs font-bold ${dossier?.status === 'verified' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : dossier?.status === 'changes_requested' || dossier?.status === 'rejected' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+        {dossier ? (LEGAL_STATUSES[dossier.status] || dossier.status) : 'Profil à créer'}
+      </span>
+    </div>
+    {loading ? <div className="flex items-center gap-2 py-10 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Chargement du dossier…</div> : <>
+      {dossier?.review_note && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4" role="status">
+        <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-800" />
+          <div><p className="font-bold text-amber-900">Message de l'administration</p><p className="mt-1 text-sm leading-6 text-amber-900">{dossier.review_note}</p></div></div>
+      </div>}
+      {requirements.length > 0 && <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3"><p className="text-2xl font-bold text-rose-800">{correctionCount}</p><p className="mt-1 text-xs font-semibold text-rose-800">À corriger / fournir</p></div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-2xl font-bold text-amber-900">{inReviewCount}</p><p className="mt-1 text-xs font-semibold text-amber-900">En attente d'examen</p></div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><p className="text-2xl font-bold text-emerald-800">{verifiedCount}</p><p className="mt-1 text-xs font-semibold text-emerald-800">Validés</p></div>
+      </div>}
+      {dossier?.status === 'submitted' && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+        <p className="text-sm text-amber-900">Le dossier est transmis. Vous pouvez retirer la soumission tant que l'examen n'a pas commencé.</p>
+        <button type="button" disabled={busy} onClick={() => setConfirmAction({ kind: 'withdraw' })} className="rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">Retirer ma soumission</button>
+      </div>}
+      <div className="rounded-xl border border-[#E8E1D4] bg-[#FBFAF7] p-4">
+        <button type="button" onClick={() => setShowLegalProfile(v => !v)} aria-expanded={showLegalProfile} className="flex w-full items-center justify-between gap-3 text-left">
+          <span><strong className="text-sm text-[#263F35]">Mon profil juridique</strong><span className="ml-2 text-xs text-[#69665E]">{LEGAL_RELATIONSHIPS.find(r => r.value === relationship)?.label}</span></span>
+          <span className="text-xs font-bold text-[#284C3B]">{showLegalProfile ? 'Masquer −' : 'Modifier / consulter +'}</span>
+        </button>
+        {(showLegalProfile || !dossier) && <div className="mt-4 space-y-3 border-t border-[#E8E1D4] pt-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium text-[#263F35]">Votre lien avec cet établissement
+              <select className="mt-2 w-full rounded-lg border border-[#D9D3C8] bg-white p-3" value={relationship} disabled={!editable || busy} onChange={e => void loadRequirements(e.target.value as LegalRelationship)}>
+                {LEGAL_RELATIONSHIPS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select></label>
+            <label className="text-sm font-medium text-[#263F35]">Précisions (si nécessaires)
+              <textarea className="mt-2 w-full rounded-lg border border-[#D9D3C8] p-3" rows={2} value={details} disabled={!editable || busy} onChange={e => setDetails(e.target.value)} placeholder="Précisez votre situation…" />
+            </label>
+          </div>
+          {editable && <button type="button" disabled={busy} onClick={() => void handleSave()} className="rounded-lg bg-[#284C3B] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Enregistrer mon profil juridique</button>}
+        </div>}
+      </div>
+      <div className="space-y-3">
+        <div><h3 className="font-serif text-lg font-bold text-[#263F35]">Mes justificatifs</h3><p className="mt-1 text-sm text-[#69665E]">Les pièces qui nécessitent votre intervention sont affichées en premier.</p></div>
+        {!requirements.length && <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Aucun justificatif défini pour ce profil. Vérifiez la configuration avant toute soumission.</p>}
+        {orderedRequirements.map(r => {
+          const state = getRequirementState(r);
+          const status = state.status;
+          const primary = state.primary;
+          const otherDocs = state.matches.filter(d => d.id !== primary?.id);
+          const needsAction = status === 'rejected' || status === 'missing';
+          const tone = status === 'rejected' ? 'border-rose-300 bg-rose-50/50' : status === 'missing' ? 'border-amber-300 bg-amber-50/30' : status === 'verified' ? 'border-emerald-200 bg-white' : 'border-[#E8E1D4] bg-white';
+          return <article key={r.document_type} className={`rounded-2xl border p-4 sm:p-5 ${tone}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${status === 'verified' ? 'bg-emerald-100 text-emerald-800' : status === 'rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-900'}`}>
+                  {status === 'verified' ? <CheckCircle2 size={20}/> : status === 'rejected' ? <XCircle size={20}/> : status === 'missing' ? <AlertCircle size={20}/> : <Clock size={20}/>}
+                </div>
+                <div className="min-w-0"><h4 className="font-bold text-[#263F35]">{r.label_fr}{r.is_required ? ' *' : ''}</h4>
+                  <p className={`mt-1 text-sm font-bold ${status === 'rejected' ? 'text-rose-800' : status === 'verified' ? 'text-emerald-800' : status === 'missing' ? 'text-amber-900' : 'text-[#806747]'}`}>
+                    {status === 'rejected' ? 'Document refusé — remplacement nécessaire' : status === 'verified' ? 'Document validé — aucune action nécessaire' : status === 'missing' ? 'Document à fournir' : 'Document transmis — en attente d’examen'}
+                  </p>
+                </div>
+              </div>
+              {primary && <button type="button" onClick={() => showGallery(r.document_type)} className="shrink-0 rounded-lg border border-[#D9D3C8] bg-white px-3 py-2 text-xs font-semibold text-[#284C3B]">{`Consulter les pièces (${state.matches.length})`}</button>}
+            </div>
+            {status === 'rejected' && primary?.review_note && <p className="mt-3 rounded-xl border border-rose-200 bg-white p-3 text-sm leading-6 text-rose-800"><strong>Motif du refus :</strong> {primary.review_note}</p>}
+            {status === 'missing' && r.guidance_fr && <p className="mt-3 text-xs leading-5 text-[#6A665D]">{r.guidance_fr}</p>}
+            {primary && <p className="mt-3 break-all text-xs text-[#6A665D]">Fichier : {primary.original_filename || 'Justificatif'}</p>}
+            {editable && dossier && status !== 'verified' && <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button type="button" disabled={busy || !!uploadingType} onClick={() => beginUpload(r.document_type)}
+                className={`rounded-xl px-4 py-2.5 text-sm font-bold disabled:opacity-50 ${needsAction ? 'bg-[#284C3B] text-white' : 'border border-[#D9D3C8] bg-white text-[#284C3B]'}`}>
+                {uploadingType === r.document_type ? 'Envoi en cours…' : status === 'rejected' ? 'Remplacer le document refusé' : status === 'missing' ? 'Ajouter ce document' : 'Ajouter une autre pièce'}
+              </button>
+              {primary?.status === 'pending' && <button type="button" disabled={busy || !!uploadingType} onClick={() => setConfirmAction({ kind: 'delete', document: primary })} className="rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-xs font-semibold text-rose-700 disabled:opacity-50">Supprimer le dépôt en attente</button>}
+              <button type="button" onClick={() => setExpandedMetadata(v => v === r.document_type ? null : r.document_type)} className="px-2 py-2 text-xs font-semibold text-[#59645B] underline">{expandedMetadata === r.document_type ? 'Masquer les détails' : 'Précisions facultatives'}</button>
+            </div>}
+            {editable && dossier && status !== 'verified' && expandedMetadata === r.document_type && <div className="mt-3 grid gap-3 rounded-xl bg-[#F8F6F1] p-3 sm:grid-cols-2">
+              <label className="text-xs font-medium">Référence (facultatif)<input type="text" maxLength={200} value={documentMetadata[r.document_type]?.reference || ''} onChange={e => updateDocumentMetadata(r.document_type, { reference: e.target.value })} disabled={!!uploadingType || busy} className="mt-1 w-full rounded-lg border border-[#D9D3C8] bg-white p-2 text-sm" /></label>
+              <label className="text-xs font-medium">Fin de validité (si applicable)<input type="date" value={documentMetadata[r.document_type]?.validUntil || ''} onChange={e => updateDocumentMetadata(r.document_type, { validUntil: e.target.value })} disabled={!!uploadingType || busy} className="mt-1 w-full rounded-lg border border-[#D9D3C8] bg-white p-2 text-sm" /></label>
+              <label className="text-xs font-medium sm:col-span-2">Observations facultatives<textarea rows={2} maxLength={1500} value={documentMetadata[r.document_type]?.notes || ''} onChange={e => updateDocumentMetadata(r.document_type, { notes: e.target.value })} disabled={!!uploadingType || busy} className="mt-1 w-full rounded-lg border border-[#D9D3C8] bg-white p-2 text-sm" /></label>
+              <p className="text-xs text-[#6A665D] sm:col-span-2">Ces détails accompagneront le prochain document envoyé.</p>
+            </div>}
+            {otherDocs.length > 0 && <div className="mt-3 border-t border-[#E8E1D4] pt-3">
+              <button type="button" onClick={() => setShowLegalHistory(v => ({ ...v, [r.document_type]: !v[r.document_type] }))} className="text-xs font-semibold text-[#59645B] underline">
+                {showLegalHistory[r.document_type] ? 'Masquer les autres dépôts' : `Voir les autres dépôts (${otherDocs.length})`}
+              </button>
+              {showLegalHistory[r.document_type] && <div className="mt-3 space-y-2">{otherDocs.map(d => <div key={d.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-3 text-xs">
+                <span className="min-w-0 flex-1 break-all">{d.original_filename || 'Justificatif'} · {d.status === 'verified' ? 'Validé' : d.status === 'rejected' ? 'Refusé' : 'En attente'}</span>
+                <button type="button" onClick={() => { showGallery(r.document_type); setGallerySelectedId(d.id); }} className="font-semibold text-[#245C46] underline">Consulter</button>
+                {editable && d.status === 'pending' && <button type="button" disabled={busy || !!uploadingType} onClick={() => setConfirmAction({ kind: 'delete', document: d })} className="font-semibold text-rose-700 underline disabled:opacity-50">Supprimer</button>}
+                {d.review_note && <p className="w-full text-rose-800">Motif : {d.review_note}</p>}
+              </div>)}</div>}
+            </div>}
+          </article>;
+        })}
+      </div>
+      {editable && dossier && <div className="space-y-3 rounded-2xl border border-[#D9D3C8] bg-[#F8F6F1] p-4 sm:p-5">
+        <h3 className="font-bold text-[#263F35]">Soumettre le dossier à nouveau</h3>
+        <p className="text-sm text-[#6A665D]">{missing.length ? `${missing.length} catégorie(s) obligatoire(s) sans document déposé ou en attente de vérification.` : 'Chaque catégorie obligatoire comporte au moins une pièce déposée non refusée.'}</p>
+        <button type="button" disabled={busy || !!uploadingType || !!missing.length || !requirements.length} onClick={() => void handleSubmit()} className="w-full rounded-xl bg-[#284C3B] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
+          {dossier.status === 'changes_requested' || dossier.status === 'rejected' ? 'Renvoyer mon dossier après corrections' : 'Soumettre mon dossier pour vérification'}
+        </button>
+      </div>}
+    </>}
+    {galleryType && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-[#10291F]/75 p-2 backdrop-blur-sm sm:p-5" role="presentation"
+      onMouseDown={e => { if (e.target === e.currentTarget) setGalleryType(null); }}>
+      <section role="dialog" aria-modal="true" aria-label="Galerie de justificatifs" className="flex h-[92dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-[#FBFAF7] shadow-2xl">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-[#E8E1D4] bg-white px-4 py-3 sm:px-6">
+          <div className="min-w-0"><h3 className="font-serif text-lg font-bold text-[#263F35]">Tous les justificatifs</h3>
+            <p className="text-xs text-[#69665E]">{requirements.find(r => r.document_type === galleryType)?.label_fr || galleryType} · {galleryDocuments.length} dépôt(s)</p>
+          </div>
+          <button type="button" onClick={() => setGalleryType(null)} className="rounded-lg border border-[#D9D3C8] px-4 py-2 text-sm font-semibold">Fermer ×</button>
+        </header>
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto md:grid-cols-[minmax(240px,310px)_minmax(0,1fr)] md:overflow-hidden">
+          <div className="space-y-2 border-b border-[#E8E1D4] p-3 md:overflow-y-auto md:border-b-0 md:border-r sm:p-4">
+            {galleryDocuments.map((doc, index) => <button type="button" key={doc.id} onClick={() => setGallerySelectedId(doc.id)}
+              className={`flex w-full items-center gap-3 rounded-xl border p-2 text-left transition ${gallerySelected?.id === doc.id ? 'border-[#284C3B] bg-[#EFF3ED]' : 'border-[#E8E1D4] bg-white hover:border-[#B5C8B8]'}`}>
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#F1EEE7]">
+                {galleryUrls[doc.id] && !isPdf(doc)
+                  ? <img src={galleryUrls[doc.id]} alt={`Aperçu du dépôt ${index + 1}`} className="h-full w-full object-cover" />
+                  : <FileText size={26} className="text-[#284C3B]" />}
+              </span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold text-[#263F35]">{doc.original_filename || `Pièce ${index + 1}`}</span>
+                <span className={`mt-1 block text-xs font-semibold ${doc.status === 'verified' ? 'text-emerald-800' : doc.status === 'rejected' ? 'text-rose-700' : 'text-amber-800'}`}>
+                  {doc.status === 'verified' ? 'Validé' : doc.status === 'rejected' ? 'Refusé' : 'En attente'}
+                </span></span>
+            </button>)}
+            {galleryDocuments.length === 0 && <p className="p-3 text-sm text-[#69665E]">Aucun fichier déposé.</p>}
+          </div>
+          <div className="flex min-h-[400px] min-w-0 flex-col p-3 sm:p-5 md:min-h-0">
+            {galleryError && <p role="alert" className="mb-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{galleryError}</p>}
+            {gallerySelected ? <>
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0"><p className="break-all text-sm font-bold text-[#263F35]">{gallerySelected.original_filename || 'Justificatif'}</p>
+                  <p className="mt-1 text-xs text-[#69665E]">Déposé le {formatDate(gallerySelected.created_at)} · {gallerySelected.status === 'verified' ? 'Validé' : gallerySelected.status === 'rejected' ? 'Refusé' : 'En attente'}</p>
+                  {gallerySelected.review_note && <p className="mt-2 text-xs font-semibold text-rose-800">Motif : {gallerySelected.review_note}</p>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {galleryUrls[gallerySelected.id] && <a href={galleryUrls[gallerySelected.id]} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-[#D9D3C8] bg-white px-3 py-2 text-xs font-bold text-[#284C3B]">Ouvrir en grand</a>}
+                  {editable && gallerySelected.status === 'pending' && <button type="button" disabled={busy || !!uploadingType} onClick={() => { setGalleryType(null); setConfirmAction({kind:'delete', document:gallerySelected}); }}
+                    className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 disabled:opacity-50">Supprimer ce dépôt</button>}
+                </div>
+              </div>
+              <div className="flex min-h-[330px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-[#E8E1D4] bg-[#EDEAE3] md:min-h-0">
+                {galleryLoading ? <div className="flex items-center gap-2 text-sm text-[#59645B]"><Loader2 size={18} className="animate-spin"/> Chargement de l'aperçu…</div>
+                  : !galleryUrls[gallerySelected.id] ? <p className="p-4 text-center text-sm text-[#69665E]">Aperçu indisponible pour ce fichier.</p>
+                  : isPdf(gallerySelected) ? <iframe title={`Justificatif ${gallerySelected.original_filename || ''}`} src={galleryUrls[gallerySelected.id]} className="h-full min-h-[360px] w-full bg-white" />
+                  : <img src={galleryUrls[gallerySelected.id]} alt={gallerySelected.original_filename || 'Justificatif déposé'} className="max-h-full max-w-full object-contain" />}
+              </div>
+            </> : <p className="text-sm text-[#69665E]">Choisissez une pièce pour la consulter.</p>}
+          </div>
+        </div>
+      </section>
+    </div>}
+    {confirmAction && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4" role="presentation"
+      onMouseDown={e => { if (e.target === e.currentTarget && !busy) setConfirmAction(null); }}>
+      <div role="alertdialog" aria-modal="true" aria-labelledby="legal-confirm-title" aria-describedby="legal-confirm-description"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <h3 id="legal-confirm-title" className="text-lg font-bold text-[#263F35]">
+          {confirmAction.kind === 'withdraw' ? 'Retirer la soumission ?' : 'Supprimer ce justificatif ?'}
+        </h3>
+        <p id="legal-confirm-description" className="mt-3 text-sm leading-6 text-[#69665E]">
+          {confirmAction.kind === 'withdraw'
+            ? 'Votre dossier repassera en brouillon. Tous les fichiers déjà envoyés seront conservés et vous pourrez les compléter avant une nouvelle soumission.'
+            : `Le fichier « ${confirmAction.document.original_filename || 'Justificatif'} » sera supprimé. Cette action est irréversible. Vous pourrez ensuite déposer une nouvelle pièce.`}
+        </p>
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <button type="button" onClick={() => setConfirmAction(null)} disabled={busy}
+            className="rounded-lg border border-[#D9D3C8] px-4 py-2 text-sm font-semibold disabled:opacity-50">Annuler</button>
+          <button type="button" onClick={() => void confirmLegalAction()} disabled={busy}
+            className="rounded-lg bg-[#284C3B] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {confirmAction.kind === 'withdraw' ? 'Confirmer le retrait' : 'Supprimer le fichier'}
+          </button>
+        </div>
+      </div>
+    </div>}
+    {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+    {message && <p role="status" className="rounded-lg bg-green-50 p-3 text-sm text-green-900">{message}</p>}
+  </section>;
+};
 
 export default HotelierDashboardPage;

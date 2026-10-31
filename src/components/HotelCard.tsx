@@ -100,8 +100,8 @@ export const HotelCard: React.FC<HotelCardProps> = ({
   };
 
   return (
-    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[22px] border border-[#E9E2D5] bg-white transition-all duration-300 hover:border-[#B79B69]/60 hover:shadow-[0_18px_45px_-24px_rgba(27,56,45,0.28)] sm:flex-row">
-      <div className="relative h-56 shrink-0 overflow-hidden bg-[#F0EDE6] sm:h-auto sm:min-h-[275px] sm:w-[42%] lg:w-[39%]">
+    <article className="group flex min-w-0 flex-col overflow-hidden rounded-[24px] border border-[#E8E3D9] bg-[#FFFEFC] shadow-[0_6px_22px_-16px_rgba(24,58,43,0.28)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[#C6B392] hover:shadow-[0_20px_44px_-24px_rgba(24,58,43,0.35)]">
+      <div className="relative aspect-[16/10] w-full shrink-0 overflow-hidden bg-[#F0EDE6]">
         {photos.length > 0 ? (
           <button
             type="button"
@@ -112,8 +112,9 @@ export const HotelCard: React.FC<HotelCardProps> = ({
             <img
               src={photos[photoIndex]}
               alt={`${hotel.name} — photo ${photoIndex + 1} sur ${photos.length}`}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.035]"
+              className="h-full w-full object-cover transition-transform duration-500 motion-reduce:transition-none group-hover:scale-[1.025]"
               loading="lazy"
+              decoding="async"
             />
           </button>
         ) : (
@@ -128,7 +129,7 @@ export const HotelCard: React.FC<HotelCardProps> = ({
           </button>
         )}
 
-        <span className="absolute left-3 top-3 max-w-[calc(100%-5rem)] truncate rounded-lg bg-[#1B382D]/90 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white shadow-sm">
+        <span className="absolute left-3 top-3 max-w-[calc(100%-5rem)] truncate rounded-full bg-[#1B382D]/90 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-white shadow-sm">
           {getCategoryLabel(hotel.category)}
         </span>
 
@@ -169,7 +170,7 @@ export const HotelCard: React.FC<HotelCardProps> = ({
         )}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col justify-between gap-5 p-4 sm:p-5 lg:p-6">
+      <div className="flex min-w-0 flex-1 flex-col justify-between gap-4 p-4 sm:p-5">
         <div className="min-w-0">
           {location && (
             <div className="mb-2 flex min-w-0 items-center gap-1.5 text-xs font-medium text-[#746C5D]">
@@ -196,7 +197,7 @@ export const HotelCard: React.FC<HotelCardProps> = ({
           )}
 
           {!!hotel.amenities?.length && (
-            <div className="mt-4 flex flex-wrap items-center gap-1.5">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {hotel.amenities.slice(0, 4).map((amenity) => (
                 <BadgeEquipement key={amenity} id={amenity} size="sm" />
               ))}
@@ -209,18 +210,18 @@ export const HotelCard: React.FC<HotelCardProps> = ({
           )}
         </div>
 
-        <div className="border-t border-[#E9E2D5] pt-4">
-          <div className="mb-3 flex items-center gap-2 text-xs text-[#6F776E]">
+        <div className="border-t border-[#EEE9E0] pt-4">
+          <div className="mb-3 flex items-center gap-2 text-[11px] text-[#6F776E]">
             <ShieldCheck size={15} className="shrink-0 text-[#284C3B]" />
             <span>Prix et conditions détaillés avant confirmation</span>
           </div>
-          <div className="flex flex-col gap-3 min-[380px]:flex-row min-[380px]:items-end min-[380px]:justify-between">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
               {minPrice !== null ? (
                 <>
                   <p className="text-xs text-[#77796F]">À partir de</p>
                   <p className="mt-0.5 flex flex-wrap items-baseline gap-1.5">
-                    <span className="font-serif text-2xl font-bold text-[#1B382D]">
+                    <span className="font-serif text-xl font-bold text-[#1B382D] sm:text-2xl">
                       {formatFCFA(minPrice)}
                     </span>
                     <span className="text-xs text-[#77796F]">/ nuit</span>
@@ -233,7 +234,7 @@ export const HotelCard: React.FC<HotelCardProps> = ({
             <button
               type="button"
               onClick={openHotel}
-              className="inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#284C3B] min-[380px]:w-auto"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl px-4 py-3 text-xs font-semibold text-white transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#284C3B] min-[430px]:flex-none sm:text-sm"
               style={{ backgroundColor: BRAND }}
             >
               Voir les disponibilités

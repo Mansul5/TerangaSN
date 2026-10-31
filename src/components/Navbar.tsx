@@ -11,13 +11,12 @@ interface NavbarProps {
   onNavigate: (view: string, data?: any) => void;
   // Le rôle reste accepté pour compatibilité avec App.tsx.
   onOpenAuth: (mode?: 'signin' | 'signup', role?: UserRole) => void;
-  onOpenSupabaseModal: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentView, onNavigate, onOpenAuth,
 }) => {
-  const { user, profile, role, signOut } = useAuth();
+  const { user, profile, role, hasHostAccess, signOut } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -25,13 +24,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   const userMenuRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Compatibilité avec le modèle de rôles actuel : un hôte peut aussi voyager.
-  const hasHostAccess = role === 'owner' || role === 'admin';
+  // L’accès hôte dépend de l’activation effective, indépendamment du rôle admin.
   const isAdmin = role === 'admin';
   const isInHostSpace = currentView === 'hotelier-dashboard';
   const isInTravelerSpace = currentView === 'traveler-dashboard';
   const isInAdminSpace = currentView === 'admin-dashboard';
-  const accountLabel = isAdmin ? 'Administrateur' : hasHostAccess ? 'Voyageur et hôte' : 'Voyageur';
+  const accountLabel = isAdmin ? (hasHostAccess ? 'Administrateur et hôte' : 'Administrateur') : hasHostAccess ? 'Voyageur et hôte' : 'Voyageur';
   const displayName = profile?.full_name?.trim() || user?.email?.split('@')[0] || 'Mon compte';
   const initials = displayName.split(/\s+/).slice(0, 2).map(word => word.charAt(0)).join('').toUpperCase() || 'U';
 
@@ -89,30 +87,27 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const navLink = (active: boolean) =>
-    `rounded-xl px-3 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#B79B69] ${
-      active ? 'bg-[#E8EFEA] text-[#1B382D]' : 'text-[#59645B] hover:bg-[#F7F5EF] hover:text-[#284C3B]'
+    `rounded-full px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#B79B69] ${
+      active ? 'bg-[#EDF2ED] text-[#193E30]' : 'text-[#606960] hover:bg-[#F8F6F1] hover:text-[#193E30]'
     }`;
-  const menuItem = 'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#30352F] transition hover:bg-[#F7F5EF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#B79B69]';
+  const menuItem = 'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium text-[#30352F] transition hover:bg-[#F7F5EF] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#B79B69]';
 
   return (
-    <header className="sticky top-0 z-[100] w-full border-b border-[#E9E2D5] bg-white/95 shadow-sm backdrop-blur-lg">
-      <div className="hidden border-b border-[#E9E2D5] bg-[#F7F5EF] sm:block">
+    <header className="sticky top-0 z-[100] w-full border-b border-[#EAE7DF] bg-[#FFFEFB]/95 shadow-[0_2px_18px_rgba(27,56,45,0.035)] backdrop-blur-xl">
+      <div className="hidden border-b border-[#EFECE5] bg-[#F8F6F1] sm:block">
         <div className="mx-auto flex h-7 max-w-7xl items-center justify-between px-6 text-[11px] text-[#687067]">
           <span>🇸🇳 Hébergements et séjours au Sénégal</span>
           <span className="font-semibold">Français · FCFA (XOF)</span>
         </div>
       </div>
 
-      <div className="mx-auto flex h-[68px] w-full max-w-7xl items-center justify-between gap-2 px-3 sm:px-6">
+      <div className="mx-auto flex h-[76px] w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
         <button id="navbar-brand-logo" type="button" onClick={() => navigate('home')}
-          aria-label="TerangaSN — Accueil"
+          aria-label="Boly — Accueil"
           className="group flex min-w-0 shrink items-center gap-2 rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#B79B69]">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#284C3B] font-serif text-2xl font-bold text-[#F5E4C7] shadow-sm transition group-hover:bg-[#1B382D]">T</span>
           <span className="min-w-0">
-            <span className="block whitespace-nowrap font-serif text-xl font-bold tracking-tight text-[#1B382D] sm:text-2xl">
-              Teranga<span className="text-[#B79B69]">SN</span>
-            </span>
-            <span className="hidden text-[10px] font-medium tracking-wide text-[#687067] lg:block">Voyagez au rythme du Sénégal</span>
+            <span className="block whitespace-nowrap font-serif text-[30px] font-semibold leading-none tracking-[-0.055em] text-[#193E30] sm:text-[34px]">Boly<span className="ml-0.5 text-[#B69A72]">.</span></span>
+            <span className="mt-1 hidden text-[10px] font-medium tracking-[0.08em] text-[#7A8078] lg:block">L'art de séjourner au Sénégal</span>
           </span>
         </button>
 
@@ -137,7 +132,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button id="user-menu-trigger-btn" type="button"
                 onClick={() => { setIsUserMenuOpen(open => !open); setIsMobileMenuOpen(false); }}
                 aria-expanded={isUserMenuOpen} aria-haspopup="menu" aria-label={`Compte de ${displayName}`}
-                className="flex items-center gap-2 rounded-xl border border-[#E9E2D5] bg-[#F7F5EF] p-1.5 pr-2 transition hover:border-[#B79B69] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#B79B69]">
+                className="flex items-center gap-2 rounded-full border border-[#E9E5DB] bg-[#F8F6F1] p-1.5 pr-3 transition hover:border-[#B79B69] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#B79B69]">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#284C3B] text-xs font-bold text-white">{initials}</span>
                 <span className="hidden max-w-32 text-left lg:block">
                   <span className="block truncate text-xs font-bold text-[#30352F]">{displayName}</span>
@@ -147,7 +142,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               {isUserMenuOpen && (
-                <div role="menu" aria-label="Menu du compte" className="absolute right-0 top-full z-[120] mt-2 w-[min(290px,calc(100vw-1.5rem))] rounded-2xl border border-[#E9E2D5] bg-white p-2 shadow-[0_20px_45px_rgba(27,56,45,0.18)]">
+                <div role="menu" aria-label="Menu du compte" className="absolute right-0 top-full z-[120] mt-2 w-[min(290px,calc(100vw-1.5rem))] rounded-2xl border border-[#E9E2D5] bg-[#FFFEFB] p-2 shadow-[0_18px_50px_rgba(27,56,45,0.12)]">
                   <div className="mb-2 border-b border-[#E9E2D5] px-3 pb-3 pt-2">
                     <p className="truncate text-sm font-bold text-[#1B382D]">{displayName}</p>
                     <p className="truncate text-xs text-[#687067]">{user.email}</p>
@@ -173,20 +168,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           ) : (
             <div className="flex items-center gap-1.5 sm:gap-2">
               <button id="navbar-signin-btn" type="button" onClick={() => openAuth('signin')}
-                className="rounded-xl bg-[#284C3B] px-3 py-2.5 text-xs font-bold text-white transition hover:bg-[#1B382D] sm:px-4 sm:text-sm">Connexion</button>
+                className="rounded-full bg-[#193E30] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#1B382D] sm:px-4 sm:text-sm">Connexion</button>
               <button id="navbar-signup-btn" type="button" onClick={() => openAuth('signup')}
-                className="hidden rounded-xl border border-[#284C3B] px-4 py-2.5 text-sm font-bold text-[#284C3B] transition hover:bg-[#F7F5EF] sm:block">S'inscrire</button>
+                className="hidden rounded-full border border-[#D8DED6] px-4 py-2.5 text-sm font-bold text-[#284C3B] transition hover:bg-[#F7F5EF] sm:block">S'inscrire</button>
             </div>
           )}
 
           <div ref={mobileMenuRef} className="relative md:hidden">
             <button type="button" onClick={() => { setIsMobileMenuOpen(open => !open); setIsUserMenuOpen(false); }}
               aria-label={isMobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={isMobileMenuOpen}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E9E2D5] bg-[#F7F5EF] text-[#284C3B]">
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E9E2D5] bg-[#F8F6F1] text-[#193E30]">
               {isMobileMenuOpen ? <X size={21} /> : <Menu size={21} />}
             </button>
             {isMobileMenuOpen && (
-              <nav aria-label="Navigation mobile" className="absolute right-0 top-full z-[120] mt-3 w-[min(320px,calc(100vw-1.5rem))] rounded-2xl border border-[#E9E2D5] bg-white p-3 shadow-[0_20px_45px_rgba(27,56,45,0.18)]">
+              <nav aria-label="Navigation mobile" className="absolute right-0 top-full z-[120] mt-3 w-[min(320px,calc(100vw-1.5rem))] rounded-2xl border border-[#E9E2D5] bg-[#FFFEFB] p-3 shadow-[0_18px_50px_rgba(27,56,45,0.12)]">
                 <button type="button" onClick={() => navigate('home')} className={menuItem}><Home size={18} className="text-[#284C3B]" /> Accueil</button>
                 <button type="button" onClick={() => navigate('search', { destination: '' })} className={menuItem}><Search size={18} className="text-[#284C3B]" /> Hébergements</button>
                 {user && <button type="button" onClick={() => travelerSpace()} className={menuItem}><Compass size={18} className="text-[#284C3B]" /> Espace voyageur</button>}

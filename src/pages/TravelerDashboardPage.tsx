@@ -88,6 +88,11 @@ interface TravelerDashboardPageProps {
 
 
 
+const getLocalToday = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
 const getInitials = (
 
   name?: string | null,
@@ -178,7 +183,7 @@ const statusStyles = {
 
     bg: 'bg-emerald-50',
 
-    text: 'text-[#284C3B]',
+    text: 'text-[#244A39]',
 
     border: 'border-emerald-200',
 
@@ -336,7 +341,7 @@ export function TravelerDashboardPage({
     if (bookingFilter === 'all') return true;
     if (bookingFilter === 'cancelled') return booking.status === 'cancelled';
     if (booking.status === 'cancelled') return false;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalToday();
     return bookingFilter === 'upcoming' ? booking.check_out >= today : booking.check_out < today;
   }).sort((a, b) => b.check_in.localeCompare(a.check_in));
 
@@ -358,8 +363,7 @@ export function TravelerDashboardPage({
     setIsLoading(true);
 
     setDashboardError(null);
-
-
+    setFavoritesError(null);
 
     try {
 
@@ -385,6 +389,7 @@ export function TravelerDashboardPage({
 
       setBookings(bookingsResult.data || []);
       if (favoritesResult.error) {
+        setFavorites([]);
         setFavoritesError('Impossible de charger les favoris pour le moment.');
       } else {
         setFavorites(favoritesResult.data || []);
@@ -402,6 +407,8 @@ export function TravelerDashboardPage({
 
 
 
+      setBookings([]);
+      setFavorites([]);
       setDashboardError(
 
         error?.message ||
@@ -530,7 +537,7 @@ export function TravelerDashboardPage({
 
   const canCancelBooking = (booking: Booking) => {
 
-    if (booking.check_in <= new Date().toISOString().slice(0, 10)) return false;
+    if (booking.check_in <= getLocalToday()) return false;
     if (
 
       booking.status !== 'pending' &&
@@ -694,11 +701,11 @@ export function TravelerDashboardPage({
 
     return (
 
-      <div className="min-h-[70vh] flex items-center justify-center px-4 bg-[#F7F5EF]">
+      <div className="min-h-[70vh] flex items-center justify-center px-4 bg-[#F8F7F2]">
 
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-[#E9E2D5] p-5 sm:p-8 text-center">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg border border-[#E7E5DC] p-5 sm:p-8 text-center">
 
-          <div className="w-16 h-16 rounded-full bg-[#E4ECE5] text-[#284C3B] flex items-center justify-center mx-auto mb-5">
+          <div className="w-16 h-16 rounded-full bg-[#E8EFE9] text-[#244A39] flex items-center justify-center mx-auto mb-5">
 
             <User size={30} />
 
@@ -706,7 +713,7 @@ export function TravelerDashboardPage({
 
 
 
-          <h1 className="text-2xl font-bold text-[#30352F] mb-3">
+          <h1 className="text-2xl font-bold text-[#24352B] mb-3">
 
             Votre espace voyageur
 
@@ -728,7 +735,7 @@ export function TravelerDashboardPage({
 
             onClick={onOpenAuth}
 
-            className="w-full bg-[#284C3B] hover:bg-[#1B382D] text-white font-semibold py-3 rounded-xl transition-colors"
+            className="w-full bg-[#244A39] hover:bg-[#173628] text-white font-semibold py-3 rounded-xl transition-colors"
 
           >
 
@@ -792,7 +799,7 @@ export function TravelerDashboardPage({
 
       return (
 
-        <span className="text-[#284C3B] font-medium">
+        <span className="text-[#244A39] font-medium">
 
           Payé sur place
 
@@ -820,11 +827,11 @@ export function TravelerDashboardPage({
 
   return (
 
-    <div className="min-h-screen bg-[#F7F5EF]">
+    <div className="min-h-screen bg-[#F8F7F3] text-[#24352B]">
 
       {/* Espace voyageur : réservation, favoris et profil */}
 
-      <section className="bg-[#F7F5EF] border-b border-[#E9E2D5]">
+      <section className="relative overflow-hidden border-b border-[#193E30] bg-[#193E30] text-white">
 
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-7">
 
@@ -832,7 +839,7 @@ export function TravelerDashboardPage({
 
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
 
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#E4ECE5] text-[#284C3B] flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-lg font-semibold text-white shadow-sm sm:h-16 sm:w-16">
 
                 {getInitials(
 
@@ -848,7 +855,7 @@ export function TravelerDashboardPage({
 
               <div>
 
-                <p className="text-sm text-[#6A746A]">
+                <p className="text-sm text-white/70">
 
                   Bienvenue
 
@@ -856,7 +863,7 @@ export function TravelerDashboardPage({
 
 
 
-                <h1 className="text-xl sm:text-2xl font-bold text-[#30352F] break-words">
+                <h1 className="break-words font-serif text-2xl font-semibold tracking-tight text-white sm:text-4xl">
 
                   {profile?.full_name || 'Voyageur'}
 
@@ -864,7 +871,7 @@ export function TravelerDashboardPage({
 
 
 
-                <p className="text-sm text-[#6A746A] mt-1">
+                <p className="text-sm text-white/70 mt-1">
 
                   Vos séjours, vos envies, votre espace.
 
@@ -882,7 +889,7 @@ export function TravelerDashboardPage({
 
               disabled={isLoading}
 
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-[#F7F5EF] text-gray-700 font-medium transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/25 bg-white/10 hover:bg-white/20 text-white font-medium transition-colors disabled:opacity-50"
 
             >
 
@@ -994,7 +1001,7 @@ export function TravelerDashboardPage({
 
         {/* Tabs */}
 
-        <div className="bg-white border border-[#E9E2D5] rounded-2xl shadow-sm mb-6 overflow-hidden">
+        <div className="mb-8 overflow-hidden rounded-[24px] border border-[#E7E5DC] bg-white shadow-[0_12px_35px_rgba(36,74,57,0.05)]">
 
           <div className="flex overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] scrollbar-hide">
 
@@ -1006,9 +1013,9 @@ export function TravelerDashboardPage({
 
                 activeTab === 'bookings'
 
-                  ? 'text-[#284C3B] border-emerald-600'
+                  ? 'text-[#244A39] border-[#244A39]'
 
-                  : 'text-[#6A746A] border-transparent hover:text-gray-800'
+                  : 'text-[#72786F] border-transparent hover:text-gray-800'
 
               }`}
 
@@ -1038,9 +1045,9 @@ export function TravelerDashboardPage({
 
                 activeTab === 'favorites'
 
-                  ? 'text-[#284C3B] border-emerald-600'
+                  ? 'text-[#244A39] border-[#244A39]'
 
-                  : 'text-[#6A746A] border-transparent hover:text-gray-800'
+                  : 'text-[#72786F] border-transparent hover:text-gray-800'
 
               }`}
 
@@ -1070,9 +1077,9 @@ export function TravelerDashboardPage({
 
                 activeTab === 'profile'
 
-                  ? 'text-[#284C3B] border-emerald-600'
+                  ? 'text-[#244A39] border-[#244A39]'
 
-                  : 'text-[#6A746A] border-transparent hover:text-gray-800'
+                  : 'text-[#72786F] border-transparent hover:text-gray-800'
 
               }`}
 
@@ -1100,7 +1107,7 @@ export function TravelerDashboardPage({
 
               <div>
 
-                <h2 className="text-xl font-bold text-[#30352F]">
+                <h2 className="font-serif text-2xl font-semibold tracking-tight text-[#24352B] sm:text-3xl">
 
                   Mes réservations
 
@@ -1108,7 +1115,7 @@ export function TravelerDashboardPage({
 
 
 
-                <p className="text-sm text-[#6A746A] mt-1">
+                <p className="text-sm text-[#72786F] mt-1">
 
                   Retrouvez vos demandes, vos séjours confirmés et vos voyages passés.
 
@@ -1120,21 +1127,40 @@ export function TravelerDashboardPage({
 
 
 
+            <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Filtrer les réservations">
+              {([
+                ['all', 'Toutes'],
+                ['upcoming', 'À venir'],
+                ['past', 'Passées'],
+                ['cancelled', 'Annulées'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setBookingFilter(value)}
+                  aria-pressed={bookingFilter === value}
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${bookingFilter === value ? 'border-[#193E30] bg-[#193E30] text-white' : 'border-[#E7E5DC] bg-white text-[#52665B] hover:border-[#193E30]'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {isLoading ? (
 
-              <div className="bg-white rounded-2xl border border-[#E9E2D5] p-7 sm:p-12 flex flex-col items-center justify-center text-center">
+              <div className="bg-white rounded-2xl border border-[#E7E5DC] p-7 sm:p-12 flex flex-col items-center justify-center text-center">
 
                 <Loader2
 
                   size={32}
 
-                  className="animate-spin text-[#284C3B] mb-3"
+                  className="animate-spin text-[#244A39] mb-3"
 
                 />
 
 
 
-                <p className="text-[#6A746A]">
+                <p className="text-[#72786F]">
 
                   Chargement de vos réservations...
 
@@ -1144,7 +1170,7 @@ export function TravelerDashboardPage({
 
             ) : filteredBookings.length === 0 ? (
 
-              <div className="bg-white rounded-2xl border border-[#E9E2D5] p-6 sm:p-10 text-center">
+              <div className="bg-white rounded-2xl border border-[#E7E5DC] p-6 sm:p-10 text-center">
 
                 <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
 
@@ -1160,7 +1186,7 @@ export function TravelerDashboardPage({
 
 
 
-                <h3 className="font-bold text-lg text-[#30352F]">
+                <h3 className="font-bold text-lg text-[#24352B]">
 
                   Aucune réservation
 
@@ -1168,9 +1194,9 @@ export function TravelerDashboardPage({
 
 
 
-                <p className="text-[#6A746A] mt-2 mb-5">
+                <p className="text-[#72786F] mt-2 mb-5">
 
-                  Aucune réservation pour ce filtre. Vos séjours apparaîtront ici.
+                  {bookingFilter === 'all' ? 'Vos réservations apparaîtront ici dès votre première demande.' : 'Aucune réservation ne correspond à ce filtre.'}
 
                 </p>
 
@@ -1194,7 +1220,7 @@ export function TravelerDashboardPage({
 
                       key={booking.id}
 
-                      className="bg-white rounded-2xl border border-[#E9E2D5] shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                      className="overflow-hidden rounded-[26px] border border-[#E7E5DC] bg-white shadow-[0_8px_32px_rgba(36,74,57,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_45px_rgba(36,74,57,0.10)]"
 
                     >
 
@@ -1244,7 +1270,7 @@ export function TravelerDashboardPage({
 
 
 
-                                <span className="text-xs text-[#6A746A]">
+                                <span className="text-xs text-[#72786F]">
 
                                   #{booking.booking_number}
 
@@ -1254,7 +1280,7 @@ export function TravelerDashboardPage({
 
 
 
-                              <h3 className="font-bold text-base sm:text-lg text-[#30352F] break-words sm:truncate">
+                              <h3 className="font-bold text-base sm:text-lg text-[#24352B] break-words sm:truncate">
 
                                 {hotel?.name || 'Hébergement'}
 
@@ -1262,7 +1288,7 @@ export function TravelerDashboardPage({
 
 
 
-                              <div className="flex items-center gap-1.5 text-sm text-[#6A746A] mt-1">
+                              <div className="flex items-center gap-1.5 text-sm text-[#72786F] mt-1">
 
                                 <MapPin size={15} />
 
@@ -1298,7 +1324,7 @@ export function TravelerDashboardPage({
 
                           <div className="lg:text-right shrink-0">
 
-                            <p className="text-sm text-[#6A746A]">
+                            <p className="text-sm text-[#72786F]">
 
                               Total
 
@@ -1306,7 +1332,7 @@ export function TravelerDashboardPage({
 
 
 
-                            <p className="text-xl font-bold text-[#30352F]">
+                            <p className="font-serif text-2xl font-semibold tracking-tight text-[#24352B] sm:text-3xl">
 
                               {formatFCFA(
 
@@ -1334,11 +1360,11 @@ export function TravelerDashboardPage({
 
 
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-4 sm:gap-4 mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-[#E9E2D5]">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-4 sm:gap-4 mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-[#E7E5DC]">
 
                           <div>
 
-                            <p className="text-xs text-[#6A746A] mb-1">
+                            <p className="text-xs text-[#72786F] mb-1">
 
                               Arrivée
 
@@ -1346,7 +1372,7 @@ export function TravelerDashboardPage({
 
 
 
-                            <p className="text-sm font-semibold text-[#30352F]">
+                            <p className="text-sm font-semibold text-[#24352B]">
 
                               {formatDate(
 
@@ -1362,7 +1388,7 @@ export function TravelerDashboardPage({
 
                           <div>
 
-                            <p className="text-xs text-[#6A746A] mb-1">
+                            <p className="text-xs text-[#72786F] mb-1">
 
                               Départ
 
@@ -1370,7 +1396,7 @@ export function TravelerDashboardPage({
 
 
 
-                            <p className="text-sm font-semibold text-[#30352F]">
+                            <p className="text-sm font-semibold text-[#24352B]">
 
                               {formatDate(
 
@@ -1386,7 +1412,7 @@ export function TravelerDashboardPage({
 
                           <div>
 
-                            <p className="text-xs text-[#6A746A] mb-1">
+                            <p className="text-xs text-[#72786F] mb-1">
 
                               Durée
 
@@ -1394,7 +1420,7 @@ export function TravelerDashboardPage({
 
 
 
-                            <p className="text-sm font-semibold text-[#30352F]">
+                            <p className="text-sm font-semibold text-[#24352B]">
 
                               {booking.nights_count}{' '}
 
@@ -1412,7 +1438,7 @@ export function TravelerDashboardPage({
 
                           <div>
 
-                            <p className="text-xs text-[#6A746A] mb-1">
+                            <p className="text-xs text-[#72786F] mb-1">
 
                               Voyageurs
 
@@ -1420,7 +1446,7 @@ export function TravelerDashboardPage({
 
 
 
-                            <p className="text-sm font-semibold text-[#30352F]">
+                            <p className="text-sm font-semibold text-[#24352B]">
 
                               {booking.guests_adults +
 
@@ -1454,7 +1480,7 @@ export function TravelerDashboardPage({
 
                             }
 
-                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-[#F7F5EF] text-gray-700 font-semibold transition-colors"
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:bg-[#F8F7F2] text-gray-700 font-semibold transition-colors"
 
                           >
 
@@ -1500,7 +1526,7 @@ export function TravelerDashboardPage({
 
                               }
 
-                              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[#284C3B] hover:bg-emerald-50 font-semibold transition-colors"
+                              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[#244A39] hover:bg-[#E8EFE9] font-semibold transition-colors"
 
                             >
 
@@ -1540,7 +1566,7 @@ export function TravelerDashboardPage({
 
             <div className="mb-5">
 
-              <h2 className="text-xl font-bold text-[#30352F]">
+              <h2 className="font-serif text-2xl font-semibold tracking-tight text-[#24352B] sm:text-3xl">
 
                 Mes favoris
 
@@ -1548,7 +1574,7 @@ export function TravelerDashboardPage({
 
 
 
-              <p className="text-sm text-[#6A746A] mt-1">
+              <p className="text-sm text-[#72786F] mt-1">
 
                 Gardez vos belles découvertes à portée de main.
 
@@ -1558,21 +1584,27 @@ export function TravelerDashboardPage({
 
 
 
+            {favoritesError && (
+              <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                {favoritesError} <button type="button" onClick={loadUserData} className="ml-2 font-semibold underline">Réessayer</button>
+              </div>
+            )}
+
             {isLoading ? (
 
-              <div className="bg-white rounded-2xl border border-[#E9E2D5] p-12 flex flex-col items-center">
+              <div className="bg-white rounded-2xl border border-[#E7E5DC] p-12 flex flex-col items-center">
 
                 <Loader2
 
                   size={32}
 
-                  className="animate-spin text-[#284C3B] mb-3"
+                  className="animate-spin text-[#244A39] mb-3"
 
                 />
 
 
 
-                <p className="text-[#6A746A]">
+                <p className="text-[#72786F]">
 
                   Chargement de vos favoris...
 
@@ -1582,7 +1614,7 @@ export function TravelerDashboardPage({
 
             ) : favorites.length === 0 ? (
 
-              <div className="bg-white rounded-2xl border border-[#E9E2D5] p-6 sm:p-10 text-center">
+              <div className="bg-white rounded-2xl border border-[#E7E5DC] p-6 sm:p-10 text-center">
 
                 <div className="w-16 h-16 rounded-full bg-pink-50 flex items-center justify-center mx-auto mb-4">
 
@@ -1598,7 +1630,7 @@ export function TravelerDashboardPage({
 
 
 
-                <h3 className="font-bold text-lg text-[#30352F]">
+                <h3 className="font-bold text-lg text-[#24352B]">
 
                   Aucun favori
 
@@ -1606,7 +1638,7 @@ export function TravelerDashboardPage({
 
 
 
-                <p className="text-[#6A746A] mt-2">
+                <p className="text-[#72786F] mt-2">
 
                   Ajoutez des hébergements à vos favoris
 
@@ -1654,7 +1686,7 @@ export function TravelerDashboardPage({
 
             <div className="mb-5">
 
-              <h2 className="text-xl font-bold text-[#30352F]">
+              <h2 className="font-serif text-2xl font-semibold tracking-tight text-[#24352B] sm:text-3xl">
 
                 Mon profil
 
@@ -1662,7 +1694,7 @@ export function TravelerDashboardPage({
 
 
 
-              <p className="text-sm text-[#6A746A] mt-1">
+              <p className="text-sm text-[#72786F] mt-1">
 
                 Des informations à jour pour voyager sereinement.
 
@@ -1672,13 +1704,13 @@ export function TravelerDashboardPage({
 
 
 
-            <div className="bg-white rounded-2xl border border-[#E9E2D5] shadow-sm overflow-hidden">
+            <div className="overflow-hidden rounded-[26px] border border-[#E7E5DC] bg-white shadow-[0_10px_35px_rgba(36,74,57,0.05)]">
 
               <div className="p-4 sm:p-6">
 
-                <div className="flex flex-col sm:flex-row sm:items-center gap-5 pb-6 border-b border-[#E9E2D5]">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-5 pb-6 border-b border-[#E7E5DC]">
 
-                  <div className="w-20 h-20 rounded-full bg-[#E4ECE5] text-[#284C3B] flex items-center justify-center text-2xl font-bold">
+                  <div className="w-20 h-20 rounded-full bg-[#E8EFE9] text-[#244A39] flex items-center justify-center text-2xl font-bold">
 
                     {getInitials(
 
@@ -1694,7 +1726,7 @@ export function TravelerDashboardPage({
 
                   <div>
 
-                    <h3 className="text-lg font-bold text-[#30352F]">
+                    <h3 className="text-lg font-bold text-[#24352B]">
 
                       {profile?.full_name || 'Voyageur'}
 
@@ -1702,7 +1734,7 @@ export function TravelerDashboardPage({
 
 
 
-                    <p className="text-sm text-[#6A746A] mt-1">
+                    <p className="text-sm text-[#72786F] mt-1">
 
                       Compte voyageur
 
@@ -1710,17 +1742,17 @@ export function TravelerDashboardPage({
 
 
 
-                    <div className="flex items-center gap-2 text-sm text-[#6A746A] mt-2">
+                    <div className="flex items-center gap-2 text-sm text-[#72786F] mt-2">
 
                       <ShieldCheck
 
                         size={16}
 
-                        className="text-[#284C3B]"
+                        className="text-[#244A39]"
 
                       />
 
-                      Connecté à TerangaSN
+                      Connecté à Boly
 
                     </div>
 
@@ -1770,7 +1802,7 @@ export function TravelerDashboardPage({
 
                         disabled
 
-                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-[#F7F5EF] text-[#6A746A]"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-[#F8F7F2] text-[#72786F]"
 
                       />
 
@@ -1830,7 +1862,7 @@ export function TravelerDashboardPage({
 
                         placeholder="Votre nom complet"
 
-                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#244A39]/25 focus:border-transparent"
 
                       />
 
@@ -1880,7 +1912,7 @@ export function TravelerDashboardPage({
 
                         placeholder="+221 ..."
 
-                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#244A39]/25 focus:border-transparent"
 
                       />
 
@@ -1894,7 +1926,7 @@ export function TravelerDashboardPage({
 
                 {profileSuccessMsg && (
 
-                  <div className="mt-5 flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#284C3B] text-sm">
+                  <div className="mt-5 flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#244A39] text-sm">
 
                     <CheckCircle2 size={18} />
 
@@ -1914,7 +1946,7 @@ export function TravelerDashboardPage({
 
                     disabled={isUpdatingProfile}
 
-                    className="flex-1 inline-flex items-center justify-center gap-2 bg-[#284C3B] hover:bg-[#1B382D] text-white font-semibold py-3 px-5 rounded-xl transition-colors disabled:opacity-50"
+                    className="flex-1 inline-flex items-center justify-center gap-2 bg-[#244A39] hover:bg-[#173628] text-white font-semibold py-3 px-5 rounded-xl transition-colors disabled:opacity-50"
 
                   >
 
@@ -1994,13 +2026,13 @@ export function TravelerDashboardPage({
 
         >
 
-          <div className="w-full max-w-2xl max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl">
+          <div className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-[28px] bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-[28px]">
 
-            <div className="sticky top-0 z-10 bg-white border-b border-[#E9E2D5] px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
+            <div className="sticky top-0 z-10 bg-white border-b border-[#E7E5DC] px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
 
               <div>
 
-                <h3 className="text-lg font-bold text-[#30352F]">
+                <h3 className="text-lg font-bold text-[#24352B]">
 
                   Détails de la réservation
 
@@ -2008,7 +2040,7 @@ export function TravelerDashboardPage({
 
 
 
-                <p className="text-xs text-[#6A746A] mt-1">
+                <p className="text-xs text-[#72786F] mt-1">
 
                   #{selectedBooking.booking_number}
 
@@ -2025,8 +2057,9 @@ export function TravelerDashboardPage({
                   setSelectedBooking(null)
 
                 }
+                aria-label="Fermer les détails de la réservation"
 
-                className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-[#6A746A]"
+                className="w-9 h-9 rounded-full hover:bg-gray-100 flex items-center justify-center text-[#72786F]"
 
               >
 
@@ -2094,7 +2127,7 @@ export function TravelerDashboardPage({
 
 
 
-                  <h4 className="text-xl font-bold text-[#30352F]">
+                  <h4 className="font-serif text-2xl font-semibold tracking-tight text-[#24352B] sm:text-3xl">
 
                     {selectedBooking.hotel?.name ||
 
@@ -2104,7 +2137,7 @@ export function TravelerDashboardPage({
 
 
 
-                  <div className="flex items-center gap-1.5 text-sm text-[#6A746A] mt-1">
+                  <div className="flex items-center gap-1.5 text-sm text-[#72786F] mt-1">
 
                     <MapPin size={15} />
 
@@ -2132,7 +2165,7 @@ export function TravelerDashboardPage({
 
                       href={`tel:${selectedBooking.hotel.phone}`}
 
-                      className="inline-flex items-center gap-2 text-sm text-[#284C3B] font-medium mt-2"
+                      className="inline-flex items-center gap-2 text-sm text-[#244A39] font-medium mt-2"
 
                     >
 
@@ -2152,9 +2185,9 @@ export function TravelerDashboardPage({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-                <div className="p-4 rounded-xl bg-[#F7F5EF]">
+                <div className="p-4 rounded-xl bg-[#F8F7F2]">
 
-                  <div className="flex items-center gap-2 text-[#6A746A] mb-2">
+                  <div className="flex items-center gap-2 text-[#72786F] mb-2">
 
                     <Calendar size={17} />
 
@@ -2168,7 +2201,7 @@ export function TravelerDashboardPage({
 
 
 
-                  <p className="font-semibold text-[#30352F]">
+                  <p className="font-semibold text-[#24352B]">
 
                     {formatDate(
 
@@ -2182,9 +2215,9 @@ export function TravelerDashboardPage({
 
 
 
-                <div className="p-4 rounded-xl bg-[#F7F5EF]">
+                <div className="p-4 rounded-xl bg-[#F8F7F2]">
 
-                  <div className="flex items-center gap-2 text-[#6A746A] mb-2">
+                  <div className="flex items-center gap-2 text-[#72786F] mb-2">
 
                     <Calendar size={17} />
 
@@ -2198,7 +2231,7 @@ export function TravelerDashboardPage({
 
 
 
-                  <p className="font-semibold text-[#30352F]">
+                  <p className="font-semibold text-[#24352B]">
 
                     {formatDate(
 
@@ -2212,9 +2245,9 @@ export function TravelerDashboardPage({
 
 
 
-                <div className="p-4 rounded-xl bg-[#F7F5EF]">
+                <div className="p-4 rounded-xl bg-[#F8F7F2]">
 
-                  <div className="flex items-center gap-2 text-[#6A746A] mb-2">
+                  <div className="flex items-center gap-2 text-[#72786F] mb-2">
 
                     <Clock size={17} />
 
@@ -2228,7 +2261,7 @@ export function TravelerDashboardPage({
 
 
 
-                  <p className="font-semibold text-[#30352F]">
+                  <p className="font-semibold text-[#24352B]">
 
                     {selectedBooking.nights_count}{' '}
 
@@ -2244,9 +2277,9 @@ export function TravelerDashboardPage({
 
 
 
-                <div className="p-4 rounded-xl bg-[#F7F5EF]">
+                <div className="p-4 rounded-xl bg-[#F8F7F2]">
 
-                  <div className="flex items-center gap-2 text-[#6A746A] mb-2">
+                  <div className="flex items-center gap-2 text-[#72786F] mb-2">
 
                     <Users size={17} />
 
@@ -2260,7 +2293,7 @@ export function TravelerDashboardPage({
 
 
 
-                  <p className="font-semibold text-[#30352F]">
+                  <p className="font-semibold text-[#24352B]">
 
                     {selectedBooking.guests_adults}{' '}
 
@@ -2294,11 +2327,11 @@ export function TravelerDashboardPage({
 
 
 
-              <div className="border border-[#E9E2D5] rounded-xl overflow-hidden">
+              <div className="border border-[#E7E5DC] rounded-xl overflow-hidden">
 
-                <div className="px-4 py-3 bg-[#F7F5EF] border-b border-[#E9E2D5]">
+                <div className="px-4 py-3 bg-[#F8F7F2] border-b border-[#E7E5DC]">
 
-                  <h4 className="font-semibold text-[#30352F]">
+                  <h4 className="font-semibold text-[#24352B]">
 
                     Hébergement
 
@@ -2312,7 +2345,7 @@ export function TravelerDashboardPage({
 
                   <div className="flex items-center justify-between gap-4">
 
-                    <span className="text-sm text-[#6A746A] flex items-center gap-2">
+                    <span className="text-sm text-[#72786F] flex items-center gap-2">
 
                       <BedDouble size={16} />
 
@@ -2322,7 +2355,7 @@ export function TravelerDashboardPage({
 
 
 
-                    <span className="text-sm font-semibold text-[#30352F] text-right">
+                    <span className="text-sm font-semibold text-[#24352B] text-right">
 
                       {selectedBooking.room_type?.name ||
 
@@ -2336,7 +2369,7 @@ export function TravelerDashboardPage({
 
                   <div className="flex items-center justify-between gap-4">
 
-                    <span className="text-sm text-[#6A746A]">
+                    <span className="text-sm text-[#72786F]">
 
                       Nombre de chambres
 
@@ -2344,7 +2377,7 @@ export function TravelerDashboardPage({
 
 
 
-                    <span className="text-sm font-semibold text-[#30352F]">
+                    <span className="text-sm font-semibold text-[#24352B]">
 
                       {selectedBooking.rooms_count}
 
@@ -2356,7 +2389,7 @@ export function TravelerDashboardPage({
 
                   <div className="flex items-center justify-between gap-4">
 
-                    <span className="text-sm text-[#6A746A]">
+                    <span className="text-sm text-[#72786F]">
 
                       Politique d’annulation
 
@@ -2364,7 +2397,7 @@ export function TravelerDashboardPage({
 
 
 
-                    <span className="text-sm font-semibold text-[#30352F] text-right">
+                    <span className="text-sm font-semibold text-[#24352B] text-right">
 
                       {getCancellationPolicyLabel(
 
@@ -2384,11 +2417,11 @@ export function TravelerDashboardPage({
 
 
 
-              <div className="border border-[#E9E2D5] rounded-xl overflow-hidden">
+              <div className="border border-[#E7E5DC] rounded-xl overflow-hidden">
 
-                <div className="px-4 py-3 bg-[#F7F5EF] border-b border-[#E9E2D5]">
+                <div className="px-4 py-3 bg-[#F8F7F2] border-b border-[#E7E5DC]">
 
-                  <h4 className="font-semibold text-[#30352F]">
+                  <h4 className="font-semibold text-[#24352B]">
 
                     Paiement
 
@@ -2402,7 +2435,7 @@ export function TravelerDashboardPage({
 
                   <div className="flex items-center justify-between gap-4">
 
-                    <span className="text-sm text-[#6A746A] flex items-center gap-2">
+                    <span className="text-sm text-[#72786F] flex items-center gap-2">
 
                       <CreditCard size={16} />
 
@@ -2412,7 +2445,7 @@ export function TravelerDashboardPage({
 
 
 
-                    <span className="text-lg font-bold text-[#30352F]">
+                    <span className="text-lg font-bold text-[#24352B]">
 
                       {formatFCFA(
 
@@ -2428,7 +2461,7 @@ export function TravelerDashboardPage({
 
                   <div className="flex items-center justify-between gap-4">
 
-                    <span className="text-sm text-[#6A746A]">
+                    <span className="text-sm text-[#72786F]">
 
                       État du paiement
 
@@ -2460,11 +2493,11 @@ export function TravelerDashboardPage({
 
                 selectedBooking.guest_phone) && (
 
-                <div className="border border-[#E9E2D5] rounded-xl overflow-hidden">
+                <div className="border border-[#E7E5DC] rounded-xl overflow-hidden">
 
-                  <div className="px-4 py-3 bg-[#F7F5EF] border-b border-[#E9E2D5]">
+                  <div className="px-4 py-3 bg-[#F8F7F2] border-b border-[#E7E5DC]">
 
-                    <h4 className="font-semibold text-[#30352F]">
+                    <h4 className="font-semibold text-[#24352B]">
 
                       Informations du voyageur
 
@@ -2604,7 +2637,7 @@ export function TravelerDashboardPage({
 
                     }}
 
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-gray-200 hover:bg-[#F7F5EF] text-gray-700 font-semibold"
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-gray-200 hover:bg-[#F8F7F2] text-gray-700 font-semibold"
 
                   >
 
@@ -2664,7 +2697,7 @@ export function TravelerDashboardPage({
 
         <div className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
 
-          <div className="w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 sm:p-6">
+          <div className="w-full max-w-md rounded-t-[28px] bg-white p-5 shadow-2xl sm:rounded-[28px] sm:p-7">
 
             <div className="w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4">
 
@@ -2674,7 +2707,7 @@ export function TravelerDashboardPage({
 
 
 
-            <h3 className="text-xl font-bold text-[#30352F]">
+            <h3 className="font-serif text-2xl font-semibold tracking-tight text-[#24352B] sm:text-3xl">
 
               Annuler cette réservation ?
 
@@ -2754,7 +2787,7 @@ export function TravelerDashboardPage({
 
                 disabled={isCancelling}
 
-                className="flex-1 px-4 py-3 rounded-xl border border-gray-200 hover:bg-[#F7F5EF] text-gray-700 font-semibold disabled:opacity-50"
+                className="flex-1 px-4 py-3 rounded-xl border border-gray-200 hover:bg-[#F8F7F2] text-gray-700 font-semibold disabled:opacity-50"
 
               >
 

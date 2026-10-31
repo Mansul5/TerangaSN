@@ -2,6 +2,9 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, LockKeyhole, Mail, Phone, UserRound, X } from 'lucide-react';
 import { useAuth } from '@/src/context/AuthContext';
 import type { UserRole } from '@/src/types';
+import { TermsContent } from '@/src/components/TermsContent';
+import { PrivacyPolicyContent } from '@/src/components/PrivacyPolicyContent';
+import { TERMS_VERSION } from '@/src/lib/legal';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -41,6 +44,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -58,6 +64,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setConfirmPassword('');
     setFullName('');
     setPhone('');
+    setAcceptedTerms(false);
+    setShowTerms(false);
+    setShowPrivacyPolicy(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
     setLoading(false);
@@ -106,8 +115,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setMode(next);
     setPassword('');
     setConfirmPassword('');
+    setAcceptedTerms(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setShowTerms(false);
+    setShowPrivacyPolicy(false);
     setErrorMsg('');
     setSuccessMsg('');
   };
@@ -140,6 +152,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (!cleanName) { setErrorMsg('Veuillez saisir votre nom complet.'); return; }
       if (password.length < 6) { setErrorMsg('Le mot de passe doit contenir au moins 6 caractères.'); return; }
       if (password !== confirmPassword) { setErrorMsg('Les deux mots de passe ne correspondent pas.'); return; }
+      if (!acceptedTerms) { setErrorMsg('Veuillez lire et accepter les conditions d’utilisation pour créer votre compte.'); return; }
     }
     if (!isConfigured) {
       setErrorMsg('La connexion à Supabase n’est pas encore configurée.');
@@ -156,7 +169,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         onSuccess?.();
         onClose();
       } else {
-        const { error } = await signUp(cleanEmail, password, cleanName, cleanPhone);
+        const { error } = await signUp(cleanEmail, password, cleanName, cleanPhone, acceptedTerms);
         if (error) throw error;
         if (activeRequestRef.current !== request) return;
         setMode('signin');
@@ -219,6 +232,60 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
+          {mode === 'signup' && (
+            <section className="rounded-xl border border-[#DCD7CB] bg-[#FAF9F5] p-3">
+              <div className="flex items-start gap-2.5 text-sm leading-relaxed text-[#30352F]">
+                <input
+                  id="auth-accepted-terms"
+                  type="checkbox"
+                  required
+                  aria-required="true"
+                  checked={acceptedTerms}
+                  onChange={event => setAcceptedTerms(event.target.checked)}
+                  disabled={loading}
+                  className="mt-1 h-4 w-4 shrink-0 accent-[#284C3B]"
+                />
+                <div>
+                  <label htmlFor="auth-accepted-terms" className="cursor-pointer">
+                    J’ai lu et j’accepte les conditions d’utilisation de TerangaSN (version {TERMS_VERSION}).
+                  </label>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => setShowTerms(value => !value)}
+                    className="ml-1 font-semibold text-[#284C3B] underline underline-offset-2"
+                    aria-expanded={showTerms}
+                  >
+                    {showTerms ? 'Masquer les conditions' : 'Lire les conditions'}
+                  </button>
+                  <span className="mx-1 text-[#969C94]" aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => setShowPrivacyPolicy(value => !value)}
+                    className="font-semibold text-[#284C3B] underline underline-offset-2"
+                    aria-expanded={showPrivacyPolicy}
+                  >
+                    {showPrivacyPolicy ? 'Masquer la politique de confidentialité' : 'Lire la politique de confidentialité'}
+                  </button>
+                </div>
+              </div>
+              {showTerms && (
+                <div className="mt-3 max-h-56 overflow-y-auto border-t border-[#E9E2D5] pt-3">
+                  <TermsContent compact />
+                </div>
+              )}
+              {showPrivacyPolicy && (
+                <div className="mt-3 max-h-56 overflow-y-auto border-t border-[#E9E2D5] pt-3">
+                  <div role="note" className="mb-3 rounded-lg bg-[#FFF9E9] p-2 text-xs leading-5 text-[#594820]">
+                    Document de base à compléter : consultez aussi la page Politique de confidentialité depuis le footer.
+                  </div>
+                  <PrivacyPolicyContent />
+                </div>
+              )}
+            </section>
+          )}
+
           <div>
             <label htmlFor="auth-email" className={labelClass}>Adresse e-mail</label>
             <div className="relative"><Mail size={18} aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#8C947F]" />
@@ -266,7 +333,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {loading && <Loader2 size={18} className="animate-spin" aria-hidden="true" />}
             {loading ? (mode === 'signin' ? 'Connexion en cours…' : 'Création du compte…') : (mode === 'signin' ? 'Se connecter' : 'Créer mon compte')}
           </button>
-          {mode === 'signup' && <p className="text-center text-xs leading-relaxed text-[#687067]">En créant votre compte, vous acceptez les conditions d'utilisation et la politique de confidentialité de TerangaSN.</p>}
+          {mode === 'signup' && <p className="text-center text-xs leading-relaxed text-[#687067]">La politique de confidentialité vous informe sur l’utilisation de vos données. Les conditions supplémentaires pour l’espace hôte seront présentées avant son activation.</p>}
           <p className="pb-1 text-center text-sm text-[#687067]">
             {mode === 'signin' ? 'Pas encore de compte ? ' : 'Déjà un compte ? '}
             <button type="button" disabled={loading} onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')} className="font-bold text-[#284C3B] hover:underline disabled:opacity-50">
