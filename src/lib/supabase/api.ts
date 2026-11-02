@@ -857,19 +857,21 @@ export async function fetchHotelReviewDossier(
  * Review metadata is populated by guard_hotel_update() in PostgreSQL.
  */
 export async function approveHotelDossier(
-  hotelId: string
+  hotelId: string,
+  reason: string
 ): Promise<{ error: any }> {
   try {
     if (!hotelId) throw new Error('Identifiant d’établissement manquant.');
-    const { data, error } = await supabase
-      .from('hotels')
-      .update({ status: 'approved' })
-      .eq('id', hotelId)
-      .eq('status', 'pending')
-      .select('id')
-      .maybeSingle();
+    const trimmedReason = reason?.trim();
+    if (!trimmedReason || trimmedReason.length < 5 || trimmedReason.length > 2000) {
+      throw new Error('Une justification de décision (5 à 2000 caractères) est obligatoire.');
+    }
+    const { error } = await supabase.rpc('admin_review_hotel', {
+      p_hotel_id: hotelId,
+      p_status: 'approved',
+      p_reason: trimmedReason,
+    });
     if (error) throw error;
-    if (!data) throw new Error('Approbation impossible : dossier introuvable, déjà traité ou accès refusé.');
     return { error: null };
   } catch (error) {
     return { error };
@@ -887,16 +889,15 @@ export async function rejectHotelDossier(
   try {
     if (!hotelId) throw new Error('Identifiant d’établissement manquant.');
     const trimmedReason = reason?.trim();
-    if (!trimmedReason) throw new Error('Un motif de rejet est obligatoire.');
-    const { data, error } = await supabase
-      .from('hotels')
-      .update({ status: 'rejected', rejection_reason: trimmedReason })
-      .eq('id', hotelId)
-      .eq('status', 'pending')
-      .select('id')
-      .maybeSingle();
+    if (!trimmedReason || trimmedReason.length < 5 || trimmedReason.length > 2000) {
+      throw new Error('Un motif de rejet de 5 à 2000 caractères est obligatoire.');
+    }
+    const { error } = await supabase.rpc('admin_review_hotel', {
+      p_hotel_id: hotelId,
+      p_status: 'rejected',
+      p_reason: trimmedReason,
+    });
     if (error) throw error;
-    if (!data) throw new Error('Rejet impossible : dossier introuvable, déjà traité ou accès refusé.');
     return { error: null };
   } catch (error) {
     return { error };
@@ -956,13 +957,19 @@ export async function fetchAllReviewsAdmin(): Promise<{
  */
 export async function updateReviewStatus(
   reviewId: string,
-  status: 'approved' | 'rejected' | 'pending'
+  status: 'approved' | 'rejected' | 'pending',
+  reason: string
 ): Promise<{ error: any }> {
   try {
-    const { error } = await supabase
-      .from('reviews')
-      .update({ status })
-      .eq('id', reviewId);
+    const trimmedReason = reason?.trim();
+    if (!trimmedReason || trimmedReason.length < 5 || trimmedReason.length > 2000) {
+      throw new Error('Une justification de modération (5 à 2000 caractères) est obligatoire.');
+    }
+    const { error } = await supabase.rpc('admin_update_review_moderation', {
+      p_review_id: reviewId,
+      p_status: status,
+      p_reason: trimmedReason,
+    });
 
     return {
       error,

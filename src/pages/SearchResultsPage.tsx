@@ -8,6 +8,7 @@ import { formatFCFA } from '@/src/lib/formatters';
 
 interface SearchResultsPageProps {
   initialFilters: Partial<SearchFilters>;
+  onFiltersChange: (filters: Partial<SearchFilters>) => void;
   onSelectHotel: (hotelId: string) => void;
   onAuthRequired: () => void;
   onOpenSupabaseModal: () => void;
@@ -46,7 +47,7 @@ const reviewSummary = (raw: unknown): ReviewSummary => {
   return { rating: sum / valid.length, count: valid.length };
 };
 
-export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFilters, onSelectHotel, onAuthRequired }) => {
+export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFilters, onFiltersChange, onSelectHotel, onAuthRequired }) => {
   const [destination, setDestination] = useState(initialFilters.destination || '');
   const [checkIn, setCheckIn] = useState(initialFilters.checkIn || '');
   const [checkOut, setCheckOut] = useState(initialFilters.checkOut || '');
@@ -57,8 +58,8 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFil
   const [minRating, setMinRating] = useState(initialFilters.minRating ?? 0);
   const [category, setCategory] = useState<LodgingCategory | 'all'>((initialFilters.category as LodgingCategory | 'all') || 'all');
   const [amenities, setAmenities] = useState<string[]>(initialFilters.amenities || []);
-  const [maxBeachDistance, setMaxBeachDistance] = useState(0);
-  const [sortBy, setSortBy] = useState<SortOrder>('recommended');
+  const [maxBeachDistance, setMaxBeachDistance] = useState(initialFilters.maxBeachDistance || 0);
+  const [sortBy, setSortBy] = useState<SortOrder>(initialFilters.sortBy || 'recommended');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [hotels, setHotels] = useState<Lodging[]>([]);
   const [reviewStats, setReviewStats] = useState<Record<string, ReviewSummary>>({});
@@ -78,6 +79,18 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFil
     setAmenities([]); setMaxBeachDistance(0); setSortBy('recommended');
   }, []);
   const activeFilterCount = (maxPrice < MAX_BUDGET ? 1 : 0) + (minRating > 0 ? 1 : 0) + (category !== 'all' ? 1 : 0) + amenities.length + (maxBeachDistance > 0 ? 1 : 0);
+
+  useEffect(() => {
+    onFiltersChange({
+      destination, checkIn, checkOut, adults, children, rooms,
+      maxPrice: maxPrice < MAX_BUDGET ? maxPrice : undefined,
+      minRating: minRating || undefined,
+      category: category === 'all' ? undefined : category,
+      amenities,
+      maxBeachDistance: maxBeachDistance || undefined,
+      sortBy,
+    });
+  }, [destination, checkIn, checkOut, adults, children, rooms, maxPrice, minRating, category, amenities, maxBeachDistance, sortBy, onFiltersChange]);
 
   useEffect(() => {
     const id = ++requestId.current;

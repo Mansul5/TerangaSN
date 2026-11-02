@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Building2, User, Heart, CalendarDays, LogOut, ShieldAlert,
-  ChevronDown, Menu, X, Compass, PlusCircle, ArrowRight, Home, Search,
+  ChevronDown, Menu, X, Compass, PlusCircle, ArrowRight, Home, Search, LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from '@/src/context/AuthContext';
 import type { UserRole } from '@/src/types';
@@ -151,6 +151,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button role="menuitem" type="button" onClick={() => travelerSpace('bookings')} className={menuItem}><CalendarDays size={17} className="text-[#284C3B]" /> Mes réservations {isInTravelerSpace && <span className="ml-auto text-xs text-[#8C744C]">•</span>}</button>
                   <button role="menuitem" type="button" onClick={() => travelerSpace('favorites')} className={menuItem}><Heart size={17} className="text-[#284C3B]" /> Mes favoris</button>
                   <button role="menuitem" type="button" onClick={() => travelerSpace('profile')} className={menuItem}><User size={17} className="text-[#284C3B]" /> Mon profil</button>
+                  <button role="menuitem" type="button" onClick={() => navigate('support-center')} className={menuItem}><LifeBuoy size={17} className="text-[#284C3B]" /> Centre d’assistance</button>
                   <div className="my-2 border-t border-[#E9E2D5]" />
                   {hasHostAccess ? (
                     <button role="menuitem" type="button" onClick={isInHostSpace ? () => travelerSpace() : hostSpace} className={menuItem}>
@@ -185,6 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button type="button" onClick={() => navigate('home')} className={menuItem}><Home size={18} className="text-[#284C3B]" /> Accueil</button>
                 <button type="button" onClick={() => navigate('search', { destination: '' })} className={menuItem}><Search size={18} className="text-[#284C3B]" /> Hébergements</button>
                 {user && <button type="button" onClick={() => travelerSpace()} className={menuItem}><Compass size={18} className="text-[#284C3B]" /> Espace voyageur</button>}
+                {user && <button type="button" onClick={() => navigate('support-center')} className={menuItem}><LifeBuoy size={18} className="text-[#284C3B]" /> Centre d’assistance</button>}
                 <button type="button" onClick={hasHostAccess ? hostSpace : becomeHost} className={menuItem}>
                   {hasHostAccess ? <Building2 size={18} className="text-[#284C3B]" /> : <PlusCircle size={18} className="text-[#284C3B]" />}
                   {hasHostAccess ? 'Espace hôte' : 'Devenir hôte'}

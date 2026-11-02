@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { Navbar } from '@/src/components/Navbar';
 import { Footer } from '@/src/components/Footer';
@@ -14,6 +14,7 @@ import { BookingTunnelPage } from '@/src/pages/BookingTunnelPage';
 import { TravelerDashboardPage } from '@/src/pages/TravelerDashboardPage';
 import { HotelierDashboardPage } from '@/src/pages/HotelierDashboardPage';
 import { AdminDashboardPage } from '@/src/pages/AdminDashboardPage';
+import { SupportCenterPage } from '@/src/pages/SupportCenterPage';
 import { BecomeHostPage } from '@/src/pages/BecomeHostPage';
 import { HostTermsPage } from '@/src/pages/HostTermsPage';
 import { TermsPage } from '@/src/pages/TermsPage';
@@ -54,6 +55,7 @@ const DEFAULT_FILTERS: Partial<SearchFilters> = {
 function MainApp() {
   const { user, role, hasHostAccess, hasAdminStaffAccess, isLoading, refreshProfile } = useAuth();
   const [currentView, setCurrentView] = useState<string>(readSavedView);
+  const viewScrollPositions = useRef(new Map<string, number>());
   const [selectedHotelId, setSelectedHotelId] = useState<string | null>(null);
   const [searchFilters, setSearchFilters] = useState<Partial<SearchFilters>>({ ...DEFAULT_FILTERS });
   const [bookingPayload, setBookingPayload] = useState<BookingPayload | null>(null);
@@ -86,9 +88,21 @@ function MainApp() {
   // Les données du parcours restent disponibles localement pendant la soumission.
   void pendingHostOnboarding;
 
+  const navigateToView = (view: string) => {
+    if (view === currentView) return;
+    viewScrollPositions.current.set(currentView, window.scrollY);
+    setCurrentView(view);
+  };
+
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [currentView, selectedHotelId]);
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({
+        top: viewScrollPositions.current.get(currentView) || 0,
+        behavior: 'auto',
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentView]);
 
   const handleOpenAuth = (mode: 'signin' | 'signup' = 'signin', targetRole: UserRole = 'traveler') => {
     setAuthModalMode(mode);
@@ -100,20 +114,20 @@ function MainApp() {
   useEffect(() => {
     if (!hostAuthPending || !user || isAuthModalOpen) return;
     setHostAuthPending(false);
-    setCurrentView('host-terms');
+    navigateToView('host-terms');
   }, [hostAuthPending, user, isAuthModalOpen]);
 
   useEffect(() => {
     if (hasAdminStaffAccess && currentView !== 'admin-dashboard') {
-      setCurrentView('admin-dashboard');
+      navigateToView('admin-dashboard');
     }
   }, [hasAdminStaffAccess, currentView]);
 
   // Les transitions de rôle peuvent arriver pendant que l'utilisateur est dans un espace protégé.
   useEffect(() => {
     if (isLoading) return;
-    if (currentView === 'admin-dashboard' && !hasAdminConsoleAccess) setCurrentView('home');
-    if (currentView === 'hotelier-dashboard' && !hasHostAccess) setCurrentView(user ? 'become-host' : 'home');
+    if (currentView === 'admin-dashboard' && !hasAdminConsoleAccess) navigateToView('home');
+    if (currentView === 'hotelier-dashboard' && !hasHostAccess) navigateToView(user ? 'become-host' : 'home');
   }, [currentView, role, hasAdminConsoleAccess, hasHostAccess, user, isLoading]);
 
   const handleNavigate = (view: string, data?: any) => {
@@ -130,35 +144,43 @@ function MainApp() {
       if (!user) handleOpenAuth('signin');
       return;
     }
+    if (view === 'support-center' && !user) {
+      handleOpenAuth('signin');
+      return;
+    }
     if (view === 'hotelier-dashboard' && !hasHostAccess) {
-      setCurrentView('become-host');
+      navigateToView('become-host');
       return;
     }
     if (view === 'traveler-dashboard' && !user) {
       handleOpenAuth('signin');
       return;
     }
-    setCurrentView(view);
+    navigateToView(view);
   };
 
   const handleSearchFromHome = (filters: Partial<SearchFilters>) => {
     setSearchFilters({ ...DEFAULT_FILTERS, ...filters });
-    setCurrentView('search');
+    navigateToView('search');
   };
+
+  const handleSearchFiltersChange = useCallback((filters: Partial<SearchFilters>) => {
+    setSearchFilters(previous => ({ ...previous, ...filters }));
+  }, []);
 
   const handleSelectRegionFromHome = (regionName: string) => {
     setSearchFilters({ ...DEFAULT_FILTERS, destination: regionName });
-    setCurrentView('search');
+    navigateToView('search');
   };
 
   const handleSelectHotel = (hotelId: string) => {
     setSelectedHotelId(hotelId);
-    setCurrentView('hotel-detail');
+    navigateToView('hotel-detail');
   };
 
   const handleProceedToBooking = (payload: BookingPayload) => {
     setBookingPayload(payload);
-    setCurrentView('booking-tunnel');
+    navigateToView('booking-tunnel');
   };
 
   const handleStartHostJourney = () => {
@@ -168,7 +190,7 @@ function MainApp() {
       return;
     }
     setHostAuthPending(false);
-    setCurrentView('host-terms');
+    navigateToView('host-terms');
   };
 
   const handleAcceptHostTerms = () => {
@@ -179,7 +201,7 @@ function MainApp() {
     }
     setHostOnboardingMode('first-host');
     setHostSubmissionError(null);
-    setCurrentView('host-onboarding');
+    navigateToView('host-onboarding');
   };
 
   const handleAddLodging = () => {
@@ -189,7 +211,7 @@ function MainApp() {
     }
     setHostOnboardingMode('add-lodging');
     setHostSubmissionError(null);
-    setCurrentView('host-onboarding');
+    navigateToView('host-onboarding');
   };
 
   const handleCompleteHostOnboarding = async (data: HostOnboardingData) => {
@@ -229,7 +251,7 @@ function MainApp() {
         });
         if (createError) throw createError;
         setPendingHostOnboarding(null);
-        setCurrentView('hotelier-dashboard');
+        navigateToView('hotelier-dashboard');
         return;
       }
 
@@ -245,7 +267,7 @@ function MainApp() {
       if (error) throw error;
       setPendingHostOnboarding(data);
       await refreshProfile();
-      setCurrentView('hotelier-dashboard');
+      navigateToView('hotelier-dashboard');
     } catch (error) {
       console.error('Activation hôte impossible :', error);
       setHostSubmissionError(error instanceof Error ? error.message : (typeof error === 'object' && error !== null && 'message' in error ? String(error.message) : 'Impossible d’enregistrer l’établissement. Veuillez réessayer.'));
@@ -275,6 +297,7 @@ function MainApp() {
         {currentView === 'search' && (
           <SearchResultsPage
             initialFilters={searchFilters}
+            onFiltersChange={handleSearchFiltersChange}
             onSelectHotel={handleSelectHotel}
             onAuthRequired={() => handleOpenAuth('signin')}
             onOpenSupabaseModal={() => {}}
@@ -295,7 +318,7 @@ function MainApp() {
               children: searchFilters.children,
               rooms: searchFilters.rooms,
             }}
-            onBack={() => setCurrentView('search')}
+            onBack={() => navigateToView('search')}
             onProceedToBooking={handleProceedToBooking}
             onAuthRequired={() => handleOpenAuth('signin')}
           />
@@ -312,10 +335,10 @@ function MainApp() {
             roomsCount={bookingPayload.roomsCount}
             nightsCount={bookingPayload.nightsCount}
             totalPrice={bookingPayload.totalPrice}
-            onBack={() => setCurrentView('hotel-detail')}
+            onBack={() => navigateToView('hotel-detail')}
             onViewBookings={() => {
               setDashboardTab('bookings');
-              setCurrentView('traveler-dashboard');
+              navigateToView('traveler-dashboard');
             }}
           />
         )}
@@ -327,6 +350,10 @@ function MainApp() {
             onSelectHotel={handleSelectHotel}
             onOpenAuth={() => handleOpenAuth('signin')}
           />
+        )}
+
+        {currentView === 'support-center' && user && (
+          <SupportCenterPage onBack={() => handleNavigate('home')} />
         )}
 
         {currentView === 'become-host' && (
@@ -342,27 +369,27 @@ function MainApp() {
 
         {currentView === 'host-terms' && (
           <HostTermsPage
-            onBack={() => setCurrentView('become-host')}
+            onBack={() => navigateToView('become-host')}
             onContinue={handleAcceptHostTerms}
           />
         )}
 
         {currentView === 'terms' && (
           <TermsPage
-            onBack={() => setCurrentView('home')}
-            onHostTerms={() => setCurrentView('host-terms-public')}
+            onBack={() => navigateToView('home')}
+            onHostTerms={() => navigateToView('host-terms-public')}
           />
         )}
 
         {currentView === 'privacy-policy' && (
-          <PrivacyPolicyPage onBack={() => setCurrentView('home')} />
+          <PrivacyPolicyPage onBack={() => navigateToView('home')} />
         )}
 
         {currentView === 'host-terms-public' && (
           <HostTermsPage
             readOnly
-            onBack={() => setCurrentView('terms')}
-            onContinue={() => setCurrentView('home')}
+            onBack={() => navigateToView('terms')}
+            onContinue={() => navigateToView('home')}
           />
         )}
 
@@ -378,7 +405,7 @@ function MainApp() {
             )}
             <HostOnboardingPage
               mode={hostOnboardingMode}
-              onBack={() => setCurrentView(hostOnboardingMode === 'add-lodging' ? 'hotelier-dashboard' : 'host-terms')}
+              onBack={() => navigateToView(hostOnboardingMode === 'add-lodging' ? 'hotelier-dashboard' : 'host-terms')}
               onComplete={handleCompleteHostOnboarding}
             />
           </div>

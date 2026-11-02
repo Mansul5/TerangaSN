@@ -372,6 +372,10 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [adminProfiles, setAdminProfiles] = useState<any[]>([]);
   const [adminPlans, setAdminPlans] = useState<any[]>([]);
   const [adminSubscriptions, setAdminSubscriptions] = useState<any[]>([]);
+  const [adminSubscriptionRequests, setAdminSubscriptionRequests] = useState<any[]>([]);
+  const [adminInvoices, setAdminInvoices] = useState<any[]>([]);
+  const [adminPayments, setAdminPayments] = useState<any[]>([]);
+  const [adminEnterpriseContracts, setAdminEnterpriseContracts] = useState<any[]>([]);
   const [bookingLoadError, setBookingLoadError] = useState('');
   const [profileLoadError, setProfileLoadError] = useState('');
   const [financeLoadError, setFinanceLoadError] = useState('');
@@ -384,6 +388,22 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [profileSearch, setProfileSearch] = useState('');
   const [openedBooking, setOpenedBooking] = useState<string | null>(null);
   const [openedProfile, setOpenedProfile] = useState<string | null>(null);
+  const [enterpriseOwnerId, setEnterpriseOwnerId] = useState('');
+  const [enterpriseAmount, setEnterpriseAmount] = useState('0');
+  const [enterpriseCommission, setEnterpriseCommission] = useState('0');
+  const [enterpriseStartDate, setEnterpriseStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [enterpriseEndDate, setEnterpriseEndDate] = useState('');
+  const [enterpriseTerms, setEnterpriseTerms] = useState('');
+  const [enterprisePaymentContractId, setEnterprisePaymentContractId] = useState('');
+  const [enterprisePaymentAmount, setEnterprisePaymentAmount] = useState('');
+  const [enterprisePaymentReference, setEnterprisePaymentReference] = useState('');
+  const [paymentAccountHolder, setPaymentAccountHolder] = useState('');
+  const [paymentBankName, setPaymentBankName] = useState('');
+  const [paymentAccountReference, setPaymentAccountReference] = useState('');
+  const [paymentInstructions, setPaymentInstructions] = useState('');
+  const [financeActionBusy, setFinanceActionBusy] = useState(false);
+  const [financeActionNotice, setFinanceActionNotice] = useState('');
+  const [subscriptionProofLinks, setSubscriptionProofLinks] = useState<Record<string, string>>({});
 
   const loadAdminBookings = async () => {
     setBookingLoading(true);
@@ -415,22 +435,158 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     setFinanceLoading(true);
     setFinanceLoadError('');
     try {
-      const [plans, subscriptions] = await Promise.all([
+      const [plans, subscriptions, requests, invoices, payments, contracts, instructions] = await Promise.all([
         supabase.from('saas_plans')
           .select('code,label,monthly_price_xof,marketplace_commission_pct,max_active_lodgings,max_collaborators')
           .order('monthly_price_xof', {ascending:true,nullsFirst:false}),
         supabase.from('owner_subscriptions')
           .select('owner_id,plan_code,status,current_period_start,current_period_end,custom_marketplace_commission_pct,custom_max_active_lodgings,custom_max_collaborators')
           .order('current_period_end', {ascending:true,nullsFirst:false}).limit(1000),
+        supabase.from('subscription_change_requests')
+          .select('id,owner_id,reference,amount_xof,proof_path,status,submitted_at,proof_submitted_at,reviewed_at,review_note')
+          .order('submitted_at', {ascending:false}).limit(1000),
+        supabase.from('subscription_invoices')
+          .select('id,owner_id,enterprise_contract_id,invoice_number,invoice_type,amount_xof,status,issued_at,paid_at')
+          .order('issued_at', {ascending:false}).limit(1000),
+        supabase.from('subscription_payments')
+          .select('id,invoice_id,payment_reference,confirmed_at,confirmed_by')
+          .order('confirmed_at', {ascending:false}).limit(1000),
+        supabase.from('enterprise_contracts')
+          .select('id,owner_id,contract_reference,status,monthly_amount_xof,marketplace_commission_pct,starts_at,ends_at,terms')
+          .order('created_at', {ascending:false}).limit(1000),
+        supabase.from('subscription_payment_instructions')
+          .select('account_holder,bank_name,account_reference,instructions').eq('id', 1).maybeSingle(),
       ]);
       if (plans.error) throw plans.error;
       if (subscriptions.error) throw subscriptions.error;
+      if (requests.error) throw requests.error;
+      if (invoices.error) throw invoices.error;
+      if (payments.error) throw payments.error;
+      if (contracts.error) throw contracts.error;
+      if (instructions.error) throw instructions.error;
       setAdminPlans(plans.data || []);
       setAdminSubscriptions(subscriptions.data || []);
+      setAdminSubscriptionRequests(requests.data || []);
+      setAdminInvoices(invoices.data || []);
+      setAdminPayments(payments.data || []);
+      setAdminEnterpriseContracts(contracts.data || []);
+      setPaymentAccountHolder(instructions.data?.account_holder || '');
+      setPaymentBankName(instructions.data?.bank_name || '');
+      setPaymentAccountReference(instructions.data?.account_reference || '');
+      setPaymentInstructions(instructions.data?.instructions || '');
     } catch (error) {
       setFinanceLoadError(getErrorMessage(error));
     } finally {
       setFinanceLoading(false);
+    }
+  };
+
+  const reviewBusinessRequest = async (requestId: string, approve: boolean) => {
+    const request = adminSubscriptionRequests.find(item => item.id === requestId);
+    if (!request || request.status !== 'pending') return;
+    if (approve && !window.confirm(`Confirmez-vous que le virement de 39 900 FCFA (référence ${request.reference}) a bien été reçu sur le compte officiel TerangaSN ?`)) return;
+    setFinanceActionBusy(true);
+    setFinanceActionNotice('');
+    setFinanceLoadError('');
+    try {
+      const { error } = await supabase.rpc('admin_review_business_subscription', {
+        p_request_id: requestId,
+        p_approve: approve,
+        p_note: approve ? 'Paiement vérifié par l’équipe finance.' : 'Justificatif ou paiement non validé.',
+      });
+      if (error) throw error;
+      setFinanceActionNotice(approve ? 'Paiement confirmé : la facture a été émise et la formule Business activée.' : 'Demande refusée ; la formule du compte reste inchangée.');
+      await loadAdminFinance();
+    } catch (actionError) {
+      setFinanceLoadError(getErrorMessage(actionError));
+    } finally {
+      setFinanceActionBusy(false);
+    }
+  };
+
+  const openSubscriptionProof = async (path: string) => {
+    setFinanceLoadError('');
+    try {
+      const { data, error } = await supabase.storage
+        .from('subscription-proofs')
+        .createSignedUrl(path, 300);
+      if (error) throw error;
+      if (!data?.signedUrl) throw new Error('Lien temporaire du justificatif indisponible.');
+      setSubscriptionProofLinks(previous => ({ ...previous, [path]: data.signedUrl }));
+    } catch (proofError) {
+      setFinanceLoadError(getErrorMessage(proofError));
+    }
+  };
+
+  const createEnterpriseContract = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFinanceActionBusy(true);
+    setFinanceActionNotice('');
+    setFinanceLoadError('');
+    try {
+      const { error } = await supabase.rpc('admin_create_enterprise_contract', {
+        p_owner_id: enterpriseOwnerId.trim(),
+        p_monthly_amount_xof: Number(enterpriseAmount),
+        p_marketplace_commission_pct: Number(enterpriseCommission),
+        p_starts_at: new Date(`${enterpriseStartDate}T00:00:00`).toISOString(),
+        p_ends_at: enterpriseEndDate ? new Date(`${enterpriseEndDate}T00:00:00`).toISOString() : null,
+        p_terms: enterpriseTerms.trim(),
+      });
+      if (error) throw error;
+      setEnterpriseOwnerId('');
+      setEnterpriseTerms('');
+      setFinanceActionNotice('Contrat Enterprise enregistré et formule associée mise à jour.');
+      await loadAdminFinance();
+    } catch (actionError) {
+      setFinanceLoadError(getErrorMessage(actionError));
+    } finally {
+      setFinanceActionBusy(false);
+    }
+  };
+
+  const recordEnterprisePayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFinanceActionBusy(true);
+    setFinanceActionNotice('');
+    setFinanceLoadError('');
+    try {
+      const { error } = await supabase.rpc('admin_record_enterprise_payment', {
+        p_contract_id: enterprisePaymentContractId,
+        p_amount_xof: Number(enterprisePaymentAmount),
+        p_payment_reference: enterprisePaymentReference.trim(),
+      });
+      if (error) throw error;
+      setEnterprisePaymentContractId('');
+      setEnterprisePaymentAmount('');
+      setEnterprisePaymentReference('');
+      setFinanceActionNotice('Paiement Enterprise enregistré ; sa facture payée est intégrée aux encaissements généraux.');
+      await loadAdminFinance();
+    } catch (actionError) {
+      setFinanceLoadError(getErrorMessage(actionError));
+    } finally {
+      setFinanceActionBusy(false);
+    }
+  };
+
+  const savePaymentInstructions = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFinanceActionBusy(true);
+    setFinanceActionNotice('');
+    setFinanceLoadError('');
+    try {
+      const { error } = await supabase.rpc('admin_set_business_payment_instructions', {
+        p_account_holder: paymentAccountHolder.trim(),
+        p_bank_name: paymentBankName.trim(),
+        p_account_reference: paymentAccountReference.trim(),
+        p_instructions: paymentInstructions.trim(),
+      });
+      if (error) throw error;
+      setFinanceActionNotice('Coordonnées officielles de paiement enregistrées.');
+      await loadAdminFinance();
+    } catch (actionError) {
+      setFinanceLoadError(getErrorMessage(actionError));
+    } finally {
+      setFinanceActionBusy(false);
     }
   };
 
@@ -469,6 +625,8 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<any[]>([]);
   const [caseSanctions, setCaseSanctions] = useState<any[]>([]);
+  const [supportRatings, setSupportRatings] = useState<any[]>([]);
+  const [supportPerformance, setSupportPerformance] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [supportError, setSupportError] = useState('');
   const [presenceError, setPresenceError] = useState('');
@@ -480,11 +638,10 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [supportStatusFilter, setSupportStatusFilter] = useState('all');
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [supportMessages, setSupportMessages] = useState<any[]>([]);
-  const [newTicketSubject, setNewTicketSubject] = useState('');
-  const [newTicketDescription, setNewTicketDescription] = useState('');
-  const [newTicketCategory, setNewTicketCategory] = useState('question');
-  const [newTicketBookingId, setNewTicketBookingId] = useState('');
+  const [supportAttachments, setSupportAttachments] = useState<any[]>([]);
+  const [supportRequester, setSupportRequester] = useState<any | null>(null);
   const [newMessageBody, setNewMessageBody] = useState('');
+  const [newMessageInternal, setNewMessageInternal] = useState(true);
   const [newSanctionTargetId, setNewSanctionTargetId] = useState('');
   const [newSanctionType, setNewSanctionType] = useState('warning');
   const [newSanctionReason, setNewSanctionReason] = useState('');
@@ -496,19 +653,28 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const loadInternalSupport = async () => {
     setSupportError('');
     const canReadSanctions = isAdministrator || adminStaffPermissions.includes('disputes');
-    const [t, a, s] = await Promise.all([
+    const canReadSupportMetrics = isAdministrator || adminStaffPermissions.includes('support');
+    const [t, a, r, p, s] = await Promise.all([
       supabase.from('support_tickets').select('*').order('created_at', {ascending:false}).limit(500),
       isAdministrator
         ? supabase.from('admin_staff_members').select('*').order('created_at', {ascending:false}).limit(200)
+        : Promise.resolve({ data: [], error: null }),
+      canReadSupportMetrics
+        ? supabase.from('support_ticket_ratings').select('ticket_id,rated_by,rating,comment,created_at').order('created_at', {ascending:false}).limit(1000)
+        : Promise.resolve({ data: [], error: null }),
+      canReadSupportMetrics
+        ? supabase.rpc('get_support_agent_performance')
         : Promise.resolve({ data: [], error: null }),
       canReadSanctions ? supabase.from('admin_sanctions')
         .select('id,support_ticket_id,target_user_id,sanction_type,reason,amount_xof,starts_at,ends_at,created_by,created_at')
         .order('created_at', {ascending:false}).limit(500)
         : Promise.resolve({ data: [], error: null }),
     ]);
-    if (t.error || a.error || s.error) { setSupportError((t.error || a.error || s.error)?.message || 'Chargement impossible'); return; }
+    if (t.error || a.error || r.error || p.error || s.error) { setSupportError((t.error || a.error || r.error || p.error || s.error)?.message || 'Chargement impossible'); return; }
     setSupportTickets(t.data || []);
     setStaffAssignments(a.data || []);
+    setSupportRatings(r.data || []);
+    setSupportPerformance(p.data || []);
     setCaseSanctions(s.data || []);
   };
   const loadGovernanceData = async () => {
@@ -516,9 +682,11 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     setGovernanceError('');
     try {
       const [logs, sanctions] = await Promise.all([
-        supabase.from('admin_audit_logs')
-          .select('id,actor_id,action,entity_type,entity_id,support_ticket_id,old_data,new_data,created_at')
-          .order('created_at', {ascending:false}).limit(200),
+        isAdministrator
+          ? supabase.from('admin_audit_logs')
+            .select('id,actor_id,actor_name,action,entity_type,entity_id,support_ticket_id,old_data,new_data,reason,created_at')
+            .order('created_at', {ascending:false}).limit(200)
+          : Promise.resolve({ data: [], error: null }),
         (isAdministrator || adminStaffPermissions.includes('disputes')) ? supabase.from('admin_sanctions')
           .select('id,support_ticket_id,target_user_id,sanction_type,reason,amount_xof,starts_at,ends_at,created_by,created_at')
           .order('created_at',{ascending:false}).limit(500)
@@ -541,13 +709,30 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     if (user && (role === 'admin' || adminStaffPermissions.includes('supervision')) && activeSection === 'reports') void loadGovernanceData();
   }, [activeSection,role,user?.id,adminStaffPermissions]);
   useEffect(() => {
-    if (!selectedTicketId || activeSection !== 'assistance') {setSupportMessages([]); return;}
+    if (!selectedTicketId || activeSection !== 'assistance') {
+      setSupportMessages([]);
+      setSupportAttachments([]);
+      setSupportRequester(null);
+      return;
+    }
     let active = true;
-    void supabase.from('support_ticket_messages').select('*').eq('ticket_id',selectedTicketId)
-      .order('created_at',{ascending:true}).then(({data,error}) => {
-        if (!active) return;
-        if (error) setSupportError(error.message); else setSupportMessages(data || []);
-      });
+    void Promise.all([
+      supabase.from('support_ticket_messages').select('*').eq('ticket_id',selectedTicketId)
+        .order('created_at',{ascending:true}),
+      supabase.from('support_ticket_attachments').select('id,storage_path,file_name,content_type,file_size,created_at')
+        .eq('ticket_id',selectedTicketId).order('created_at',{ascending:true}),
+      supabase.rpc('get_support_requester_details', { p_ticket_id: selectedTicketId }),
+    ]).then(([messages,attachments,requester]) => {
+      if (!active) return;
+      if (messages.error || attachments.error || requester.error) setSupportError((messages.error || attachments.error || requester.error)?.message || 'Chargement du dossier impossible.');
+      else {
+        setSupportMessages(messages.data || []);
+        setSupportAttachments(attachments.data || []);
+        setSupportRequester(requester.data);
+      }
+    }).catch(error => {
+      if (active) setSupportError(getErrorMessage(error));
+    });
     return () => {active=false};
   }, [selectedTicketId,activeSection]);
   const supportAction = async (work: () => Promise<{error:any}>, done: string) => {
@@ -556,8 +741,15 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     try { const result=await work(); if (result.error) throw result.error;
       setSupportNotice(done); await loadInternalSupport();
       if (selectedTicketId) {
-        const r=await supabase.from('support_ticket_messages').select('*').eq('ticket_id',selectedTicketId).order('created_at',{ascending:true});
-        if (!r.error) setSupportMessages(r.data || []);
+        const [messages,attachments]=await Promise.all([
+          supabase.from('support_ticket_messages').select('*').eq('ticket_id',selectedTicketId).order('created_at',{ascending:true}),
+          supabase.from('support_ticket_attachments').select('id,storage_path,file_name,content_type,file_size,created_at').eq('ticket_id',selectedTicketId).order('created_at',{ascending:true}),
+        ]);
+        if (messages.error || attachments.error) setSupportError((messages.error || attachments.error)?.message || 'Actualisation du dossier impossible.');
+        else {
+          setSupportMessages(messages.data || []);
+          setSupportAttachments(attachments.data || []);
+        }
       }
     } catch(e) {setSupportError(getErrorMessage(e));} finally {setSupportBusy(false);}
   };
@@ -1024,16 +1216,19 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       setDossierError('Le dossier juridique doit être vérifié avant toute approbation.');
       return;
     }
-    if (decision === 'rejected' && !rejectionReason.trim()) {
-      setDossierError('Le motif de rejet est obligatoire.');
+    const reason = decision === 'approved'
+      ? window.prompt('Indiquez la justification de l’approbation (5 caractères minimum).')?.trim() || ''
+      : rejectionReason.trim();
+    if (reason.length < 5 || reason.length > 2000) {
+      setDossierError('Une justification de décision de 5 à 2000 caractères est obligatoire.');
       return;
     }
     setBusyAction(`lodging-${selectedDossier.id}-${decision}`);
     setDossierError('');
     try {
       const result = decision === 'approved'
-        ? await approveHotelDossier(selectedDossier.id)
-        : await rejectHotelDossier(selectedDossier.id, rejectionReason);
+        ? await approveHotelDossier(selectedDossier.id, reason)
+        : await rejectHotelDossier(selectedDossier.id, reason);
       if (result.error) throw result.error;
       setSelectedDossier(null);
       setRejectionReason('');
@@ -1057,6 +1252,12 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   ) => {
 
     const actionKey = `review-${review.id}-${status}`;
+    const reason = window.prompt('Indiquez la justification de cette décision de modération (5 caractères minimum).')?.trim();
+    if (!reason) return;
+    if (reason.length < 5 || reason.length > 2000) {
+      setErrorMessage('La justification de modération doit contenir 5 à 2000 caractères.');
+      return;
+    }
 
     setBusyAction(actionKey);
 
@@ -1066,7 +1267,7 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
     try {
 
-      const { error } = await updateReviewStatus(review.id, status);
+      const { error } = await updateReviewStatus(review.id, status, reason);
 
       if (error) throw error;
 
@@ -2207,19 +2408,18 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     <div className="space-y-6">
       <SectionHeading
         title="Direction / Supervision administrative"
-        description="Journal des actions, contrôle des opérations de l’équipe et rapports d’activité."
-        badge="Backend à connecter"
+        description="Journal des actions réservé à la direction, contrôle des opérations de l’équipe et rapports d’activité."
+        badge={isAdministrator ? 'Direction' : 'Supervision'}
       />
-      <div className="flex items-start gap-3 rounded-[22px] border border-amber-200 bg-amber-50 p-4 sm:p-5">
+      {isAdministrator && <div className="flex items-start gap-3 rounded-[22px] border border-amber-200 bg-amber-50 p-4 sm:p-5">
         <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-700" />
         <div>
-          <h3 className="font-semibold text-[#1B382D]">Historique administratif non disponible</h3>
+          <h3 className="font-semibold text-[#1B382D]">Journal administratif</h3>
           <p className="mt-1 text-sm leading-6 text-[#647267]">
-            Le schéma actuel ne fournit pas de journal d’audit ni de rapports administratifs.
-            Aucune action, sanction ou donnée d’activité n’est simulée ici.
+            Les mutations sensibles sont enregistrées par la base. L’accès à l’historique global est réservé à la direction.
           </p>
         </div>
-      </div>
+      </div>}
       {governanceError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{governanceError} — Vérifiez que la migration admin est appliquée et que votre compte a le rôle administrateur.</p>}
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-[#647267]">Les sanctions sont immuables et toujours rattachées à un dossier de litige.</p>
@@ -2233,9 +2433,9 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           <p className="mt-1 text-xs text-[#647267]">200 dernières opérations enregistrées automatiquement par la base.</p>
         </div>
         <div className="divide-y divide-[#E9E2D5]">
-          {auditLogs.length === 0 ? <p className="p-4 text-sm text-[#647267]">{governanceLoading ? 'Chargement du journal…' : 'Aucune action enregistrée.'}</p> : auditLogs.map(log => (
+          {!isAdministrator ? <p className="p-4 text-sm text-[#647267]">La consultation globale du journal est réservée à la direction.</p> : auditLogs.length === 0 ? <p className="p-4 text-sm text-[#647267]">{governanceLoading ? 'Chargement du journal…' : 'Aucune action enregistrée.'}</p> : auditLogs.map(log => (
             <article key={log.id} className="grid gap-1 p-4 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
-              <div><p className="font-semibold text-[#30352F]">{String(log.action).replace(/_/g, ' ')}</p><p className="mt-1 break-all text-[#647267]">{log.entity_type} · {log.entity_id}{log.support_ticket_id ? ` · Dossier ${log.support_ticket_id}` : ''} · Admin {String(log.actor_id || 'inconnu').slice(0,8)}</p>{(log.old_data||log.new_data)&&<p className="mt-1 break-all text-[#647267]">Modifications : {JSON.stringify({avant:log.old_data,après:log.new_data})}</p>}</div>
+              <div><p className="font-semibold text-[#30352F]">{String(log.action).replace(/_/g, ' ')}</p><p className="mt-1 break-all text-[#647267]">{log.entity_type} · {log.entity_id}{log.support_ticket_id ? ` · Dossier ${log.support_ticket_id}` : ''} · Auteur {log.actor_name ? `${log.actor_name} (${String(log.actor_id || 'inconnu')})` : String(log.actor_id || 'inconnu')}</p>{log.reason&&<p className="mt-1 text-[#647267]">Justification : {log.reason}</p>}{(log.old_data||log.new_data)&&<p className="mt-1 break-all text-[#647267]">Modifications : {JSON.stringify({avant:log.old_data,après:log.new_data})}</p>}</div>
               <time className="text-[#647267]">{new Date(log.created_at).toLocaleString('fr-FR')}</time>
               {log.support_ticket_id&&<button type="button" className="text-left font-semibold text-[#284C3B] underline" onClick={()=>{setSelectedTicketId(log.support_ticket_id);setActiveSection('assistance');}}>Ouvrir le dossier lié</button>}
             </article>
@@ -2263,8 +2463,8 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             <h3 className="font-semibold text-[#1B382D]">Historique centralisé des actions</h3>
           </div>
           <p className="mt-3 text-sm leading-6 text-[#647267]">
-            Le journal devra conserver l’auteur, la date, le dossier concerné, la décision
-            et son motif pour chaque intervention administrative.
+            Le journal conserve l’identifiant de l’auteur, l’horodatage, l’entité,
+            les valeurs avant/après et les justifications disponibles.
           </p>
         </section>
         <section className="rounded-2xl border border-[#E9E2D5] bg-white p-5">
@@ -2297,8 +2497,8 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             <h3 className="font-semibold text-[#1B382D]">Sanctions rattachées aux dossiers</h3>
           </div>
           <p className="mt-3 text-sm leading-6 text-[#647267]">
-            Toute mesure devra être enregistrée dans le dossier concerné — notamment un litige —
-            avec son motif et sa durée, puis apparaître dans l’historique centralisé.
+            Toute mesure est enregistrée dans le dossier concerné — notamment un litige —
+            avec son motif et sa durée, puis apparaît dans l’historique centralisé.
           </p>
           <button type="button" onClick={() => setActiveSection('assistance')} className="mt-4 rounded-xl border border-[#C8D9CD] px-4 py-2 text-xs font-bold text-[#284C3B]">
             Accéder aux dossiers d’assistance et litiges
@@ -2406,6 +2606,137 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             </tbody>
           </table>
         </div>
+      </section>
+
+      {financeActionNotice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{financeActionNotice}</p>}
+      <section className="rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+        <h3 className="font-serif text-lg font-bold text-[#193E30]">Coordonnées officielles pour les virements Business</h3>
+        <p className="mt-1 text-xs text-[#647267]">Ces coordonnées sont affichées aux hôtes avant la création de leur référence de paiement.</p>
+        <form onSubmit={savePaymentInstructions} className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-semibold text-[#284C3B]">Nom du bénéficiaire
+            <input required minLength={2} maxLength={200} value={paymentAccountHolder} onChange={event => setPaymentAccountHolder(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] p-2.5 text-sm" />
+          </label>
+          <label className="text-xs font-semibold text-[#284C3B]">Banque / opérateur
+            <input required minLength={2} maxLength={200} value={paymentBankName} onChange={event => setPaymentBankName(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] p-2.5 text-sm" />
+          </label>
+          <label className="text-xs font-semibold text-[#284C3B] sm:col-span-2">Numéro / référence de compte
+            <input required minLength={2} maxLength={200} value={paymentAccountReference} onChange={event => setPaymentAccountReference(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] p-2.5 text-sm" />
+          </label>
+          <label className="text-xs font-semibold text-[#284C3B] sm:col-span-2">Instructions pour le transfert
+            <textarea maxLength={2000} rows={3} value={paymentInstructions} onChange={event => setPaymentInstructions(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] p-2.5 text-sm" />
+          </label>
+          <button type="submit" disabled={financeActionBusy} className="rounded-xl bg-[#284C3B] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50 sm:col-span-2">Enregistrer les coordonnées</button>
+        </form>
+      </section>
+      <section className="space-y-4 rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+        <div>
+          <h3 className="font-serif text-lg font-bold text-[#193E30]">Demandes Business à vérifier</h3>
+          <p className="mt-1 text-xs text-[#647267]">La formule reste inchangée tant qu’un membre finance n’a pas confirmé le virement reçu.</p>
+        </div>
+        {adminSubscriptionRequests.filter(request => request.status === 'pending').length === 0 ? (
+          <p className="text-sm text-[#647267]">Aucune demande en attente.</p>
+        ) : <div className="space-y-3">
+          {adminSubscriptionRequests.filter(request => request.status === 'pending').map(request => <article key={request.id} className="rounded-xl border border-[#E9E2D5] bg-[#FCFBF8] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-mono text-sm font-bold text-[#193E30]">{request.reference}</p>
+                <p className="mt-1 break-all text-xs text-[#647267]">Compte hôte : {request.owner_id}</p>
+                <p className="mt-1 text-xs text-[#647267]">{formatFCFA(Number(request.amount_xof))} · justificatif transmis le {formatDate(request.proof_submitted_at || request.submitted_at)}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {subscriptionProofLinks[request.proof_path]
+                  ? <a href={subscriptionProofLinks[request.proof_path]} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-[#C8D9CD] px-3 py-2 text-xs font-bold text-[#284C3B]">Ouvrir le justificatif</a>
+                  : <button type="button" onClick={() => void openSubscriptionProof(request.proof_path)} className="rounded-xl border border-[#C8D9CD] px-3 py-2 text-xs font-bold text-[#284C3B]">Charger le justificatif</button>}
+                <button type="button" disabled={financeActionBusy} onClick={() => void reviewBusinessRequest(request.id, false)} className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 disabled:opacity-50">Refuser</button>
+                <button type="button" disabled={financeActionBusy} onClick={() => void reviewBusinessRequest(request.id, true)} className="rounded-xl bg-[#284C3B] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Confirmer le paiement</button>
+              </div>
+            </div>
+          </article>)}
+        </div>}
+      </section>
+
+      <section className="space-y-4 rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="font-serif text-lg font-bold text-[#193E30]">Contrats Enterprise</h3>
+            <p className="mt-1 text-xs text-[#647267]">Gestion dédiée des termes et statistiques contractuelles ; seuls les règlements confirmés comptent comme revenus encaissés.</p>
+          </div>
+          <div className="rounded-xl bg-[#EFF3ED] px-4 py-3 text-xs text-[#284C3B]">
+            Contrats : <strong>{adminEnterpriseContracts.length}</strong>
+            <span className="mx-2">·</span>
+            Encaissé Enterprise : <strong>{formatFCFA(adminInvoices.filter(invoice => invoice.invoice_type === 'enterprise_contract' && invoice.status === 'paid').reduce((total, invoice) => total + Number(invoice.amount_xof), 0))}</strong>
+          </div>
+        </div>
+        <form onSubmit={createEnterpriseContract} className="grid gap-3 rounded-xl border border-[#E9E2D5] bg-[#FCFBF8] p-4 sm:grid-cols-2 xl:grid-cols-3">
+          <label className="text-xs font-semibold text-[#284C3B]">UUID du compte hôte
+            <input required value={enterpriseOwnerId} onChange={event => setEnterpriseOwnerId(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] bg-white p-2.5 text-sm" placeholder="UUID du profil" />
+          </label>
+          <label className="text-xs font-semibold text-[#284C3B]">Montant mensuel (FCFA)
+            <input required type="number" min="0" step="1" value={enterpriseAmount} onChange={event => setEnterpriseAmount(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] bg-white p-2.5 text-sm" />
+          </label>
+          <label className="text-xs font-semibold text-[#284C3B]">Commission marketplace (%)
+            <input required type="number" min="0" max="100" step="0.01" value={enterpriseCommission} onChange={event => setEnterpriseCommission(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] bg-white p-2.5 text-sm" />
+          </label>
+          <label className="text-xs font-semibold text-[#284C3B]">Début du contrat
+            <input required type="date" value={enterpriseStartDate} onChange={event => setEnterpriseStartDate(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] bg-white p-2.5 text-sm" />
+          </label>
+          <label className="text-xs font-semibold text-[#284C3B]">Fin (facultative)
+            <input type="date" value={enterpriseEndDate} onChange={event => setEnterpriseEndDate(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D5DFD3] bg-white p-2.5 text-sm" />
+          </label>
+          <label className="text-xs font-semibold text-[#284C3B] sm:col-span-2 xl:col-span-3">Conditions et notes contractuelles
+            <textarea required minLength={1} maxLength={10000} value={enterpriseTerms} onChange={event => setEnterpriseTerms(event.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-[#D5DFD3] bg-white p-2.5 text-sm" />
+          </label>
+          <button type="submit" disabled={financeActionBusy} className="rounded-xl bg-[#284C3B] px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50 sm:col-span-2 xl:col-span-3">Créer le contrat Enterprise</button>
+        </form>
+        {adminEnterpriseContracts.length === 0 ? <p className="text-sm text-[#647267]">Aucun contrat Enterprise enregistré.</p> : <div className="space-y-3">
+          {adminEnterpriseContracts.map(contract => {
+            const contractRevenue = adminInvoices
+              .filter(invoice => invoice.enterprise_contract_id === contract.id && invoice.status === 'paid')
+              .reduce((total, invoice) => total + Number(invoice.amount_xof), 0);
+            return <article key={contract.id} className="rounded-xl border border-[#E9E2D5] p-4">
+              <div className="flex flex-wrap justify-between gap-3">
+                <div>
+                  <p className="font-mono text-sm font-bold text-[#193E30]">{contract.contract_reference}</p>
+                  <p className="mt-1 break-all text-xs text-[#647267]">Compte : {contract.owner_id}</p>
+                  <p className="mt-1 text-xs text-[#647267]">{formatFCFA(Number(contract.monthly_amount_xof))} / mois · {contract.marketplace_commission_pct}% marketplace · encaissé : {formatFCFA(contractRevenue)}</p>
+                  <p className="mt-1 text-xs text-[#647267]">{formatDate(contract.starts_at)}{contract.ends_at ? ` → ${formatDate(contract.ends_at)}` : ' · sans échéance définie'} · {contract.status}</p>
+                </div>
+                <details className="max-w-2xl text-xs">
+                  <summary className="cursor-pointer font-bold text-[#284C3B]">Voir les conditions</summary>
+                  <p className="mt-2 whitespace-pre-wrap leading-5 text-[#59645B]">{contract.terms}</p>
+                </details>
+              </div>
+              {contract.status === 'active' && <form onSubmit={recordEnterprisePayment} className="mt-4 grid gap-2 border-t border-[#E9E2D5] pt-3 sm:grid-cols-4">
+                <input type="hidden" value={enterprisePaymentContractId} readOnly />
+                <label className="text-xs font-semibold text-[#284C3B]">Montant encaissé
+                  <input required type="number" min="1" step="1" value={enterprisePaymentContractId === contract.id ? enterprisePaymentAmount : ''} onChange={event => { setEnterprisePaymentContractId(contract.id); setEnterprisePaymentAmount(event.target.value); }} className="mt-1 w-full rounded-lg border border-[#D5DFD3] p-2 text-sm" />
+                </label>
+                <label className="text-xs font-semibold text-[#284C3B] sm:col-span-2">Référence du paiement reçu
+                  <input required value={enterprisePaymentContractId === contract.id ? enterprisePaymentReference : ''} onChange={event => { setEnterprisePaymentContractId(contract.id); setEnterprisePaymentReference(event.target.value); }} className="mt-1 w-full rounded-lg border border-[#D5DFD3] p-2 text-sm" />
+                </label>
+                <button type="submit" disabled={financeActionBusy || enterprisePaymentContractId !== contract.id} className="self-end rounded-xl border border-[#C8D9CD] px-3 py-2 text-xs font-bold text-[#284C3B] disabled:opacity-50">Enregistrer l’encaissement</button>
+              </form>}
+            </article>;
+          })}
+        </div>}
+      </section>
+
+      <section className="space-y-4 rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+        <div className="flex flex-wrap justify-between gap-3">
+          <div><h3 className="font-serif text-lg font-bold text-[#193E30]">Encaissements d’abonnements et contrats</h3><p className="mt-1 text-xs text-[#647267]">Le total général inclut Business et les contrats Enterprise, uniquement après confirmation.</p></div>
+          <p className="rounded-xl bg-[#EFF3ED] px-4 py-3 text-sm font-bold text-[#284C3B]">Total encaissé : {formatFCFA(adminInvoices.filter(invoice => invoice.status === 'paid').reduce((total, invoice) => total + Number(invoice.amount_xof), 0))}</p>
+        </div>
+        {adminInvoices.length === 0 ? <p className="text-sm text-[#647267]">Aucun encaissement d’abonnement enregistré.</p> : <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px] text-left text-xs">
+            <thead className="border-b border-[#E9E2D5] bg-[#F7F5EF] text-[#647267]"><tr><th className="p-3">Facture</th><th className="p-3">Compte hôte</th><th className="p-3">Type</th><th className="p-3">Montant</th><th className="p-3">Référence paiement</th><th className="p-3">Statut</th><th className="p-3">Date d’encaissement</th></tr></thead>
+            <tbody className="divide-y divide-[#E9E2D5]">{adminInvoices.map(invoice => <tr key={invoice.id}>
+              <td className="p-3 font-mono">{invoice.invoice_number}</td><td className="break-all p-3 font-mono">{invoice.owner_id}</td>
+              <td className="p-3">{invoice.invoice_type === 'enterprise_contract' ? 'Enterprise' : 'Business'}</td>
+              <td className="p-3">{formatFCFA(Number(invoice.amount_xof))}</td><td className="p-3 font-mono">{adminPayments.find(payment => payment.invoice_id === invoice.id)?.payment_reference || '—'}</td><td className="p-3">{invoice.status === 'paid' ? 'Payée' : 'Annulée'}</td>
+              <td className="p-3">{invoice.paid_at ? formatDate(invoice.paid_at) : '—'}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>}
       </section>
 
       <div className="grid gap-4 sm:gap-6 xl:grid-cols-2">
@@ -2633,19 +2964,42 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     const shown=supportTickets.filter(t => (supportStatusFilter==='all'||t.status===supportStatusFilter) &&
       [t.subject,t.description,t.id].some(v=>String(v||'').toLowerCase().includes(supportSearch.toLowerCase())));
     const chosen=supportTickets.find(t=>t.id===selectedTicketId);
-    const createTicket=async(e:React.FormEvent) => { e.preventDefault();
-      if (!user || newTicketSubject.trim().length<5 || newTicketDescription.trim().length<10) return;
-      if (newTicketCategory === 'dispute' && !newTicketBookingId.trim()) {
-        setSupportError('Un dossier de litige doit être associé à une réservation.');
+    const updateTicket = (ticket: any, values: { status: string; priority: string; assigned_to: string | null }) => {
+      const reason = window.prompt('Indiquez la justification de cette modification (5 caractères minimum).')?.trim();
+      if (!reason) return;
+      if (reason.length < 5) {
+        setSupportError('La justification doit contenir au moins 5 caractères.');
         return;
       }
-      await supportAction(async () => {
-        const r=await supabase.from('support_tickets').insert({
-          subject:newTicketSubject.trim(),description:newTicketDescription.trim(),category:newTicketCategory,
-          requester_id:user.id,booking_id:newTicketBookingId.trim() || null,created_by:user.id,
-        });
-        if (!r.error) {setNewTicketSubject('');setNewTicketDescription('');setNewTicketBookingId('');} return r;
-      },'Ticket créé et enregistré.');
+      void supportAction(
+        async () => supabase.rpc('admin_update_support_ticket', {
+          p_ticket_id: ticket.id,
+          p_status: values.status,
+          p_priority: values.priority,
+          p_assigned_to: values.assigned_to,
+          p_reason: reason,
+        }),
+        'Dossier mis à jour et justification journalisée.',
+      );
+    };
+    const statusNames: Record<string, string> = {
+      open: 'Nouveau',
+      in_progress: 'En cours',
+      waiting_user: 'En attente du client',
+      follow_up: 'À relancer',
+      resolved: 'Résolu',
+      closed: 'Clôturé',
+    };
+    const averageRating = supportRatings.length
+      ? supportRatings.reduce((sum, item) => sum + Number(item.rating), 0) / supportRatings.length
+      : null;
+    const openSupportAttachment = async (attachment: any) => {
+      setSupportError('');
+      const { data, error } = await supabase.storage
+        .from('support-attachments').createSignedUrl(attachment.storage_path, 60);
+      if (error) setSupportError(error.message);
+      else if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+      else setSupportError('Lien de téléchargement indisponible.');
     };
     const issueSanction=async(e:React.FormEvent) => {
       e.preventDefault();
@@ -2683,32 +3037,39 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       },'Sanction enregistrée dans le dossier et le journal central.');
     };
     return <div className="space-y-5">
-      <SectionHeading title="Centre d’assistance" description="Tickets internes enregistrés et historisés. Les échanges clients et les pièces jointes seront ouverts après sécurisation des accès externes." badge="Interne" />
+      <SectionHeading title="Centre d’assistance" description="Boîte de réception des demandes, échanges clients, pièces jointes, litiges et attributions." badge="Équipe" />
       {supportError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{supportError} — Vérifiez que les migrations d’assistance et d’équipe ont été exécutées dans Supabase.</div>}
       {supportNotice && <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">{supportNotice}</p>}
-      <form onSubmit={createTicket} className="space-y-3 rounded-2xl border bg-white p-5">
-        <h3 className="font-semibold">Ouvrir un dossier interne</h3>
-        <div className="grid gap-3 sm:grid-cols-2"><input className={inputClass} aria-label="Objet" value={newTicketSubject} onChange={e=>setNewTicketSubject(e.target.value)} minLength={5} maxLength={180} required placeholder="Objet du ticket"/>
-        <select className={inputClass} aria-label="Catégorie" value={newTicketCategory} onChange={e=>setNewTicketCategory(e.target.value)}>{[['question','Question'],['booking','Réservation'],['account','Compte'],['technical','Technique'],['dispute','Litige'],['other','Autre']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></div>
-        {newTicketCategory === 'dispute' && <input className={inputClass} aria-label="Identifiant de réservation lié au litige" value={newTicketBookingId} onChange={e=>setNewTicketBookingId(e.target.value)} required placeholder="UUID de la réservation liée (depuis Réservations)"/>}
-        <textarea className={inputClass} aria-label="Description" value={newTicketDescription} onChange={e=>setNewTicketDescription(e.target.value)} minLength={10} maxLength={5000} required rows={3} placeholder="Contexte factuel, problème et actions attendues"/>
-        <button type="submit" disabled={supportBusy} className="rounded-xl bg-[#193E30] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">Créer le ticket</button>
-      </form>
+      <section className="rounded-2xl border border-[#E9E2D5] bg-white p-4">
+        <h3 className="font-semibold text-[#193E30]">Qualité de l’assistance</h3>
+        <p className="mt-1 text-sm text-[#647267]">
+          {averageRating === null ? 'Aucune évaluation reçue.' : `${averageRating.toFixed(1)} / 5 · ${supportRatings.length} évaluation(s).`}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {supportPerformance.map(agent => (
+            <span key={agent.agent_id} className="rounded-full bg-[#F7F5EF] px-3 py-1.5 text-xs text-[#59645B]">
+              {agent.agent_name} · {agent.resolved_tickets} résolu(s) · {agent.average_rating === null ? 'sans évaluation' : `${Number(agent.average_rating).toFixed(1)} / 5 (${agent.rated_tickets})`}
+            </span>
+          ))}
+        </div>
+      </section>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="space-y-3 rounded-2xl border bg-white p-4">
           <h3 className="font-bold">Dossiers ({shown.length})</h3>
           <input className={inputClass} value={supportSearch} onChange={e=>setSupportSearch(e.target.value)} placeholder="Rechercher un ticket" aria-label="Rechercher"/>
-          <select className={inputClass} aria-label="Statut" value={supportStatusFilter} onChange={e=>setSupportStatusFilter(e.target.value)}>{[['all','Tous'],['open','Ouvert'],['in_progress','En cours'],['waiting_user','Attente utilisateur'],['resolved','Résolu'],['closed','Fermé']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>
-          <div className="max-h-[550px] space-y-2 overflow-y-auto">{shown.length===0?<p className="p-3 text-sm text-[#647267]">Aucun ticket correspondant.</p>:shown.map(t=><button type="button" key={t.id} onClick={()=>setSelectedTicketId(t.id)} className={'w-full rounded-xl border p-3 text-left text-sm '+(t.id===selectedTicketId?'border-[#193E30] bg-[#EFF3ED]':'border-[#E9E2D5]')}><strong>{t.subject}</strong><p className="mt-1 text-xs text-[#647267]">{t.category} · {t.status} · {new Date(t.created_at).toLocaleDateString('fr-FR')}</p>{t.booking_id&&<p className="mt-1 break-all text-[10px] text-[#647267]">Réservation : {t.booking_id}</p>}</button>)}</div>
+          <select className={inputClass} aria-label="Statut" value={supportStatusFilter} onChange={e=>setSupportStatusFilter(e.target.value)}>{[['all','Tous'],['open','Nouveau'],['in_progress','En cours'],['waiting_user','En attente du client'],['follow_up','À relancer'],['resolved','Résolu'],['closed','Clôturé']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select>
+          <div className="max-h-[550px] space-y-2 overflow-y-auto">{shown.length===0?<p className="p-3 text-sm text-[#647267]">Aucune demande correspondante.</p>:shown.map(t=><button type="button" key={t.id} onClick={()=>setSelectedTicketId(t.id)} className={'w-full rounded-xl border p-3 text-left text-sm '+(t.id===selectedTicketId?'border-[#193E30] bg-[#EFF3ED]':'border-[#E9E2D5]')}><strong>{t.subject}</strong><p className="mt-1 text-xs text-[#647267]">{t.category} · {statusNames[t.status] || t.status} · {new Date(t.created_at).toLocaleDateString('fr-FR')}</p>{t.booking_id&&<p className="mt-1 break-all text-[10px] text-[#647267]">Réservation : {t.booking_id}</p>}</button>)}</div>
         </div>
         <div className="space-y-4 rounded-2xl border bg-white p-5">
           {!chosen?<p className="text-sm text-[#647267]">Sélectionnez un dossier pour consulter son suivi.</p>:<>
-            <h3 className="text-lg font-bold">{chosen.subject}</h3><p className="whitespace-pre-wrap text-sm">{chosen.description}</p>
-            <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Statut<select className={inputClass} value={chosen.status} disabled={supportBusy} onChange={e=>void supportAction(async()=>supabase.from('support_tickets').update({status:e.target.value,updated_at:new Date().toISOString(),resolved_at:['resolved','closed'].includes(e.target.value)?new Date().toISOString():null}).eq('id',chosen.id),'Statut mis à jour.')} >
-              {[['open','Ouvert'],['in_progress','En cours'],['waiting_user','Attente utilisateur'],['resolved','Résolu'],['closed','Fermé']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
-            <label className="text-xs font-semibold">Priorité<select className={inputClass} value={chosen.priority} disabled={supportBusy} onChange={e=>void supportAction(async()=>supabase.from('support_tickets').update({priority:e.target.value,updated_at:new Date().toISOString()}).eq('id',chosen.id),'Priorité mise à jour.')}>
+            <h3 className="text-lg font-bold">{chosen.subject}</h3>
+            <p className="text-xs text-[#647267]">Demandeur : {supportRequester?.full_name || 'Nom non renseigné'} · {supportRequester?.email || 'Email indisponible'}{supportRequester?.phone ? ` · ${supportRequester.phone}` : ''}</p>
+            <p className="whitespace-pre-wrap text-sm">{chosen.description}</p>
+            <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Statut<select className={inputClass} value={chosen.status} disabled={supportBusy} onChange={e=>updateTicket(chosen,{status:e.target.value,priority:chosen.priority,assigned_to:chosen.assigned_to||null})} >
+              {[['open','Nouveau'],['in_progress','En cours'],['waiting_user','En attente du client'],['follow_up','À relancer'],['resolved','Résolu'],['closed','Clôturé']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
+            <label className="text-xs font-semibold">Priorité<select className={inputClass} value={chosen.priority} disabled={supportBusy} onChange={e=>updateTicket(chosen,{status:chosen.status,priority:e.target.value,assigned_to:chosen.assigned_to||null})} >
               {[['low','Basse'],['normal','Normale'],['high','Haute'],['urgent','Urgente']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label></div>
-            {isAdministrator&&<label className="block text-xs font-semibold">Responsable<select className={inputClass} value={chosen.assigned_to||''} disabled={supportBusy} onChange={e=>void supportAction(async()=>supabase.from('support_tickets').update({assigned_to:e.target.value||null,updated_at:new Date().toISOString()}).eq('id',chosen.id),'Attribution enregistrée.')}><option value="">Non attribué</option>{staffAssignments.filter(a=>a.account_status==='active'&&a.user_id).map(a=><option key={a.id} value={a.user_id}>{a.full_name}</option>)}</select></label>}
+            {isAdministrator&&<label className="block text-xs font-semibold">Responsable<select className={inputClass} value={chosen.assigned_to||''} disabled={supportBusy} onChange={e=>updateTicket(chosen,{status:chosen.status,priority:chosen.priority,assigned_to:e.target.value||null})}><option value="">Non attribué</option>{staffAssignments.filter(a=>a.account_status==='active'&&a.user_id).map(a=><option key={a.id} value={a.user_id}>{a.full_name}</option>)}</select></label>}
             {chosen.category === 'dispute' && (isAdministrator||adminStaffPermissions.includes('disputes')) && <>
               <section className="space-y-3 rounded-xl border border-[#E9E2D5] bg-[#F7F5EF] p-4">
                 <div>
@@ -2735,9 +3096,15 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 </form>
               </section>
             </>}
-            <h4 className="border-t pt-3 font-semibold">Journal interne</h4><p className="text-xs text-[#647267]">Ces notes ne sont pas envoyées au client.</p>
-            <div className="max-h-64 space-y-2 overflow-y-auto">{supportMessages.length===0?<p className="text-sm text-[#647267]">Aucune note.</p>:supportMessages.map(m=><div key={m.id} className="rounded-lg bg-[#F7F5EF] p-3 text-sm"><p className="whitespace-pre-wrap">{m.body}</p><p className="mt-2 text-xs text-[#647267]">{new Date(m.created_at).toLocaleString('fr-FR')} · {String(m.author_id).slice(0,8)}</p></div>)}</div>
-            <form onSubmit={e=>{e.preventDefault();if(!user||!newMessageBody.trim())return;void supportAction(async()=>{const r=await supabase.from('support_ticket_messages').insert({ticket_id:chosen.id,author_id:user.id,body:newMessageBody.trim()});if(!r.error)setNewMessageBody('');return r},'Note ajoutée au journal.')}} className="space-y-2"><textarea className={inputClass} rows={3} value={newMessageBody} onChange={e=>setNewMessageBody(e.target.value)} minLength={1} maxLength={5000} required placeholder="Ajouter une note interne…"/><button disabled={supportBusy} type="submit" className="rounded-xl bg-[#193E30] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">Ajouter la note</button></form>
+            <h4 className="border-t pt-3 font-semibold">Conversation et journal interne</h4>
+            <div className="max-h-64 space-y-2 overflow-y-auto">{supportMessages.length===0?<p className="text-sm text-[#647267]">Aucun échange pour le moment.</p>:supportMessages.map(m=><div key={m.id} className="rounded-lg bg-[#F7F5EF] p-3 text-sm"><p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#8C744C]">{m.is_internal ? 'Note interne — non visible du demandeur' : 'Réponse visible par le demandeur'}</p><p className="whitespace-pre-wrap">{m.body}</p><p className="mt-2 text-xs text-[#647267]">{new Date(m.created_at).toLocaleString('fr-FR')} · {String(m.author_id).slice(0,8)}</p></div>)}</div>
+            <h4 className="font-semibold">Pièces jointes du dossier</h4>
+            {supportAttachments.length===0?<p className="text-xs text-[#647267]">Aucune pièce jointe.</p>:supportAttachments.map(attachment=><button key={attachment.id} type="button" onClick={()=>void openSupportAttachment(attachment)} className="block rounded-lg border px-3 py-2 text-left text-xs font-semibold text-[#284C3B] underline">{attachment.file_name} · {Math.ceil(attachment.file_size/1024)} Ko</button>)}
+            <form onSubmit={e=>{e.preventDefault();if(!user||!newMessageBody.trim())return;void supportAction(async()=>{const r=await supabase.from('support_ticket_messages').insert({ticket_id:chosen.id,author_id:user.id,body:newMessageBody.trim(),is_internal:newMessageInternal});if(!r.error)setNewMessageBody('');return r},newMessageInternal?'Note interne ajoutée au dossier.':'Réponse envoyée au demandeur.')}} className="space-y-2">
+              <label className="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" checked={newMessageInternal} onChange={e=>setNewMessageInternal(e.target.checked)}/> Note interne (non visible par le demandeur)</label>
+              <textarea className={inputClass} rows={3} value={newMessageBody} onChange={e=>setNewMessageBody(e.target.value)} minLength={1} maxLength={5000} required placeholder={newMessageInternal?'Ajouter une note interne…':'Rédiger une réponse au demandeur…'}/>
+              <button disabled={supportBusy} type="submit" className="rounded-xl bg-[#193E30] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{newMessageInternal?'Ajouter la note':'Envoyer la réponse'}</button>
+            </form>
           </>}
         </div>
       </div>
@@ -2783,14 +3150,20 @@ const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           : member.presence_preference === 'away' ? 'Absent' : 'En ligne';
         const presenceColor = presence === 'En ligne' ? 'bg-emerald-500' : presence === 'Absent' ? 'bg-amber-400' : 'bg-slate-400';
         const permissions = Array.isArray(member.permissions) ? member.permissions as string[] : [];
-        const updateMember = (status: string, nextPermissions: string[]) => supportAction(
-          async () => supabase.rpc('update_admin_staff_member', {
+        const updateMember = (status: string, nextPermissions: string[]) => {
+          const reason = window.prompt('Indiquez la justification de cette modification d’accès (5 caractères minimum).')?.trim();
+          if (!reason) return;
+          if (reason.length < 5 || reason.length > 2000) {
+            setSupportError('La justification doit contenir 5 à 2000 caractères.');
+            return;
+          }
+          return supportAction(async () => supabase.rpc('update_admin_staff_member', {
             p_member_id: member.id,
             p_account_status: status,
             p_permissions: nextPermissions,
-          }),
-          'Accès du collaborateur mis à jour.',
-        );
+            p_reason: reason,
+          }), 'Accès du collaborateur mis à jour et justification journalisée.');
+        };
         return <article key={member.id} className="space-y-3 rounded-xl border border-[#E9E2D5] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

@@ -264,11 +264,30 @@ export const HotelierDashboardPage: React.FC<
   const [publicationLegalLoading, setPublicationLegalLoading] = useState(false);
 
 
-  const [
-    activeSection,
-    setActiveSection,
-  ] =
-    useState<DashboardSection>('overview');
+  const [activeSection, setActiveSection] = useState<DashboardSection>(() => {
+    try {
+      const saved = window.sessionStorage.getItem(`terangasn.hotelierSection.${user?.id || 'owner'}`);
+      const sections: DashboardSection[] = [
+        'overview', 'reception', 'operations', 'team', 'subscription', 'lodgings',
+        'legal', 'bookings', 'clients', 'rooms', 'calendar', 'finances',
+        'statistics', 'reviews', 'settings',
+      ];
+      return saved && sections.includes(saved as DashboardSection)
+        ? saved as DashboardSection
+        : 'overview';
+    } catch {
+      return 'overview';
+    }
+  });
+  const dashboardMainRef = useRef<HTMLElement | null>(null);
+  const dashboardScrollPositions = useRef<Record<string, number>>((() => {
+    try {
+      const saved = window.sessionStorage.getItem(`terangasn.hotelierScroll.${user?.id || 'owner'}`);
+      return saved ? JSON.parse(saved) as Record<string, number> : {};
+    } catch {
+      return {};
+    }
+  })());
 
   const [
     calendarSelectedRoomId,
@@ -279,6 +298,27 @@ export const HotelierDashboardPage: React.FC<
     isMobileMenuOpen,
     setIsMobileMenuOpen,
   ] = useState(false);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(`terangasn.hotelierSection.${user?.id || 'owner'}`, activeSection);
+      window.sessionStorage.setItem(`terangasn.hotelierScroll.${user?.id || 'owner'}`, JSON.stringify(dashboardScrollPositions.current));
+    } catch {
+      // Session storage is optional; the dashboard remains usable without it.
+    }
+  }, [activeSection, user?.id]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const savedPosition = dashboardScrollPositions.current[activeSection];
+      if (window.innerWidth < 1024) {
+        window.scrollTo({ top: savedPosition ?? 0, behavior: 'auto' });
+      } else if (dashboardMainRef.current) {
+        dashboardMainRef.current.scrollTop = savedPosition ?? 0;
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeSection]);
 
   // ---------------------------------------------------------------------------
   // New room / offer
@@ -1298,6 +1338,9 @@ export const HotelierDashboardPage: React.FC<
   const changeSection = (
     section: DashboardSection
   ) => {
+    dashboardScrollPositions.current[activeSection] = window.innerWidth < 1024
+      ? window.scrollY
+      : dashboardMainRef.current?.scrollTop || 0;
     setActiveSection(section);
     setIsMobileMenuOpen(false);
   };
@@ -1563,7 +1606,7 @@ export const HotelierDashboardPage: React.FC<
 
         {/* CONTENT */}
 
-        <main className="min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain lg:px-8 lg:py-8">
+        <main ref={dashboardMainRef} className="min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-y-contain lg:px-8 lg:py-8">
           {isLoading ? (
             <LoadingState />
           ) : hotels.length ===
@@ -2281,11 +2324,377 @@ const OperationsWorkspace: React.FC<{rooms: RoomType[]}> = ({rooms}) => <div cla
 
 const ProWorkspace: React.FC<{title:string; description:string}> = ({title, description}) => <div className="space-y-5"><div><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">TerangaSN Manager · Pro</p><h2 className="mt-1 font-serif text-2xl font-bold text-[#284C3B]">{title}</h2></div><section className={managerPanel}><Sparkles className="text-[#B79B69]" size={28}/><h3 className="mt-4 text-lg font-bold">Fonction réservée à Pro / Enterprise</h3><p className="mt-2 max-w-2xl text-sm leading-6 text-[#6F756D]">{description}</p><p className="mt-4 rounded-xl bg-[#F7F5EF] p-3 text-xs leading-5 text-[#6F756D]">L'abonnement actif n'est pas encore fourni par l'API. Cette fonction reste désactivée pour tous jusqu'à la vérification serveur ; aucun paiement ni changement de formule n'est simulé.</p></section></div>;
 
-const SubscriptionWorkspace: React.FC = () => <div className="space-y-5"><div><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">Offre commerciale</p><h2 className="mt-1 font-serif text-2xl font-bold text-[#284C3B]">Abonnement Manager</h2><p className="mt-2 text-sm text-[#6F756D]">Comparaison des formules. Le statut réel de votre abonnement sera affiché après connexion au service d'abonnements.</p></div><div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Formule actuellement active : non vérifiée. Aucun privilège Pro n'est accordé depuis cette interface.</div><div className="grid gap-4 lg:grid-cols-3">{[
-{plan:'Standard', price:'Gratuit', details:['1 établissement', 'Chambres illimitées', 'Réservations manuelles', 'Calendrier et statistiques de base', '12 % TTC sur les réservations issues de la marketplace']},
-{plan:'Pro', price:'39 900 FCFA TTC / mois', details:['3 établissements', 'Jusqu’à 5 collaborateurs', 'Statistiques et rapports avancés', '0 % de commission TerangaSN sur les réservations marketplace']},
-{plan:'Enterprise', price:'Sur devis', details:['Limites et permissions contractuelles', 'Fonctions multiétablissements avancées', 'Accompagnement et intégrations à définir']},
-].map(item=><article key={item.plan} className={managerPanel}><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">{item.plan}</p><h3 className="mt-3 font-serif text-xl font-bold text-[#284C3B]">{item.price}</h3><ul className="mt-5 space-y-3">{item.details.map(detail=><li key={detail} className="flex items-start gap-2 text-sm text-[#59645B]"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#284C3B]"/>{detail}</li>)}</ul></article>)}</div><p className="text-xs leading-6 text-[#6F756D]">Sur toutes les formules, les réservations directes (téléphone, sur place, WhatsApp ou lien direct) ne supportent aucune commission TerangaSN. Des frais de prestataire de paiement peuvent s'appliquer séparément. Les limites devront être appliquées côté serveur.</p></div>;
+type OwnerSubscription = {
+  plan_code: 'standard' | 'business' | 'enterprise';
+  status: string;
+  current_period_start: string;
+  current_period_end: string | null;
+};
+
+type OwnerSubscriptionRequest = {
+  id: string;
+  reference: string;
+  amount_xof: number;
+  status: 'awaiting_payment' | 'pending' | 'approved' | 'rejected';
+  submitted_at: string;
+  reviewed_at: string | null;
+  review_note: string | null;
+};
+
+type BusinessPaymentInstructions = {
+  account_holder: string;
+  bank_name: string;
+  account_reference: string;
+  instructions: string;
+};
+
+type OwnerSubscriptionHistory = {
+  id: string;
+  previous_plan_code: string | null;
+  new_plan_code: string;
+  effective_at: string;
+  period_end: string | null;
+  change_type: string;
+};
+
+type OwnerSubscriptionInvoice = {
+  id: string;
+  enterprise_contract_id: string | null;
+  invoice_number: string;
+  invoice_type: string;
+  amount_xof: number;
+  status: string;
+  issued_at: string;
+  paid_at: string | null;
+};
+
+type OwnerSubscriptionPayment = {
+  id: string;
+  invoice_id: string;
+  payment_reference: string;
+  proof_path: string | null;
+  confirmed_at: string;
+};
+
+type OwnerEnterpriseContract = {
+  id: string;
+  contract_reference: string;
+  status: string;
+  monthly_amount_xof: number;
+  marketplace_commission_pct: number;
+  starts_at: string;
+  ends_at: string | null;
+  terms: string;
+};
+
+const subscriptionPlanLabels: Record<string, string> = {
+  standard: 'Standard',
+  business: 'Business',
+  enterprise: 'Enterprise',
+};
+
+const SubscriptionWorkspace: React.FC = () => {
+  const { user } = useAuth();
+  const [subscription, setSubscription] = useState<OwnerSubscription | null>(null);
+  const [requests, setRequests] = useState<OwnerSubscriptionRequest[]>([]);
+  const [history, setHistory] = useState<OwnerSubscriptionHistory[]>([]);
+  const [invoices, setInvoices] = useState<OwnerSubscriptionInvoice[]>([]);
+  const [payments, setPayments] = useState<OwnerSubscriptionPayment[]>([]);
+  const [enterpriseContracts, setEnterpriseContracts] = useState<OwnerEnterpriseContract[]>([]);
+  const [paymentInstructions, setPaymentInstructions] = useState<BusinessPaymentInstructions | null>(null);
+  const [proof, setProof] = useState<File | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [proofLinks, setProofLinks] = useState<Record<string, string>>({});
+
+  const loadSubscriptionData = async () => {
+    if (!user) return;
+    setLoading(true);
+    setError('');
+    try {
+      const [subscriptionResult, requestsResult, historyResult, invoicesResult, paymentsResult, contractsResult, instructionsResult] = await Promise.all([
+        supabase.from('owner_subscriptions')
+          .select('plan_code,status,current_period_start,current_period_end')
+          .eq('owner_id', user.id).maybeSingle(),
+        supabase.from('subscription_change_requests')
+          .select('id,reference,amount_xof,status,submitted_at,reviewed_at,review_note')
+          .eq('owner_id', user.id).order('submitted_at', { ascending: false }),
+        supabase.from('subscription_plan_history')
+          .select('id,previous_plan_code,new_plan_code,effective_at,period_end,change_type')
+          .eq('owner_id', user.id).order('effective_at', { ascending: false }),
+        supabase.from('subscription_invoices')
+          .select('id,enterprise_contract_id,invoice_number,invoice_type,amount_xof,status,issued_at,paid_at')
+          .eq('owner_id', user.id).order('issued_at', { ascending: false }),
+        supabase.from('subscription_payments')
+          .select('id,invoice_id,payment_reference,proof_path,confirmed_at')
+          .eq('owner_id', user.id).order('confirmed_at', { ascending: false }),
+        supabase.from('enterprise_contracts')
+          .select('id,contract_reference,status,monthly_amount_xof,marketplace_commission_pct,starts_at,ends_at,terms')
+          .eq('owner_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('subscription_payment_instructions')
+          .select('account_holder,bank_name,account_reference,instructions')
+          .eq('id', 1).maybeSingle(),
+      ]);
+      if (subscriptionResult.error) throw subscriptionResult.error;
+      if (requestsResult.error) throw requestsResult.error;
+      if (historyResult.error) throw historyResult.error;
+      if (invoicesResult.error) throw invoicesResult.error;
+      if (paymentsResult.error) throw paymentsResult.error;
+      if (contractsResult.error) throw contractsResult.error;
+      if (instructionsResult.error) throw instructionsResult.error;
+      setSubscription(subscriptionResult.data as OwnerSubscription | null);
+      setRequests((requestsResult.data || []) as OwnerSubscriptionRequest[]);
+      setHistory((historyResult.data || []) as OwnerSubscriptionHistory[]);
+      setInvoices((invoicesResult.data || []) as OwnerSubscriptionInvoice[]);
+      setPayments((paymentsResult.data || []) as OwnerSubscriptionPayment[]);
+      setEnterpriseContracts((contractsResult.data || []) as OwnerEnterpriseContract[]);
+      setPaymentInstructions(instructionsResult.data as BusinessPaymentInstructions | null);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Impossible de charger l’historique d’abonnement.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openOwnerPaymentProof = async (path: string) => {
+    setError('');
+    try {
+      const { data, error: signedUrlError } = await supabase.storage
+        .from('subscription-proofs')
+        .createSignedUrl(path, 300);
+      if (signedUrlError) throw signedUrlError;
+      if (!data?.signedUrl) throw new Error('Lien temporaire du justificatif indisponible.');
+      setProofLinks(previous => ({ ...previous, [path]: data.signedUrl }));
+    } catch (proofError) {
+      setError(proofError instanceof Error ? proofError.message : 'Impossible d’ouvrir le justificatif.');
+    }
+  };
+
+  useEffect(() => {
+    void loadSubscriptionData();
+  }, [user?.id]);
+
+  const createBusinessRequest = async () => {
+    if (!paymentInstructions?.account_holder || !paymentInstructions.bank_name || !paymentInstructions.account_reference) {
+      setError('Les coordonnées de paiement officielles ne sont pas encore configurées. Contactez le support TerangaSN.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    setNotice('');
+    try {
+      const { data, error: requestError } = await supabase.rpc('request_business_subscription');
+      if (requestError) throw requestError;
+      const request = Array.isArray(data) ? data[0] : data;
+      if (!request?.request_id || !request?.request_reference) {
+        throw new Error('La demande a été enregistrée sans référence de suivi.');
+      }
+      setNotice(`Demande créée. Utilisez la référence ${request.request_reference} lors du virement, puis joignez le justificatif.`);
+      await loadSubscriptionData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Impossible de créer la demande Business.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitBusinessProof = async (event: React.FormEvent, requestId: string) => {
+    event.preventDefault();
+    if (!user || !proof) {
+      setError('Ajoutez le justificatif du virement avant d’envoyer la demande.');
+      return;
+    }
+    if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(proof.type) || proof.size > 5 * 1024 * 1024) {
+      setError('Le justificatif doit être un PDF ou une image (JPEG, PNG, WebP) de 5 Mo maximum.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    setNotice('');
+    let uploadedProofPath: string | null = null;
+    let requestRegistered = false;
+    try {
+      const extension = proof.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'file';
+      const proofPath = `${user.id}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from('subscription-proofs')
+        .upload(proofPath, proof, { contentType: proof.type, upsert: false });
+      if (uploadError) throw uploadError;
+      uploadedProofPath = proofPath;
+
+      const { error: requestError } = await supabase.rpc('submit_business_subscription_proof', {
+        p_request_id: requestId,
+        p_proof_path: proofPath,
+      });
+      if (requestError) throw requestError;
+      requestRegistered = true;
+
+      setProof(null);
+      setNotice('Justificatif transmis. Votre formule reste Standard jusqu’à la vérification du paiement par TerangaSN.');
+      await loadSubscriptionData();
+    } catch (submitError) {
+      let message = submitError instanceof Error ? submitError.message : 'Impossible d’enregistrer la demande Business.';
+      if (uploadedProofPath && !requestRegistered) {
+        const { error: cleanupError } = await supabase.storage
+          .from('subscription-proofs')
+          .remove([uploadedProofPath]);
+        if (cleanupError) {
+          console.error('Nettoyage du justificatif de paiement impossible :', cleanupError);
+          message += ' Le fichier temporaire n’a pas pu être supprimé ; contactez le support.';
+        }
+      }
+      setError(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const pendingRequest = requests.find(request => request.status === 'awaiting_payment' || request.status === 'pending');
+  const businessExpired = subscription?.plan_code === 'business'
+    && Boolean(subscription.current_period_end && new Date(subscription.current_period_end).getTime() <= Date.now());
+  const businessActive = subscription?.plan_code === 'business'
+    && subscription.status === 'active'
+    && Boolean(subscription.current_period_end && new Date(subscription.current_period_end).getTime() > Date.now());
+
+  return <div className="space-y-5">
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">Offre commerciale</p>
+        <h2 className="mt-1 font-serif text-2xl font-bold text-[#284C3B]">Abonnement Manager</h2>
+        <p className="mt-2 text-sm text-[#6F756D]">Votre formule, les changements enregistrés, les factures et les paiements confirmés.</p>
+      </div>
+      <button type="button" onClick={() => void loadSubscriptionData()} disabled={loading} className="rounded-xl border border-[#C8D9CD] px-4 py-2 text-xs font-bold text-[#284C3B] disabled:opacity-50">
+        {loading ? 'Actualisation…' : 'Actualiser'}
+      </button>
+    </div>
+
+    {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
+    {notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{notice}</p>}
+    <section className="rounded-xl border border-[#D5DFD3] bg-white p-4 sm:p-5">
+      <h3 className="font-bold text-[#284C3B]">Formule active</h3>
+      {loading ? <p className="mt-2 text-sm text-[#6F756D]">Chargement…</p> : subscription ? (
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+          <strong className="text-lg">{businessExpired ? 'Standard (Business expiré)' : subscriptionPlanLabels[subscription.plan_code] || subscription.plan_code}</strong>
+          <span>Statut : {businessExpired ? 'formule Business échue' : subscription.status}</span>
+          <span>Depuis le {formatDate(subscription.current_period_start)}</span>
+          {subscription.current_period_end && <span>Échéance : {formatDate(subscription.current_period_end)}</span>}
+        </div>
+      ) : <p className="mt-2 text-sm text-rose-700">Aucun abonnement hôte n’est associé à ce compte.</p>}
+    </section>
+
+    <div className="grid gap-4 lg:grid-cols-3">
+      <article className={managerPanel}><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">Standard</p><h3 className="mt-3 font-serif text-xl font-bold text-[#284C3B]">0 FCFA / mois</h3><p className="mt-3 text-sm text-[#59645B]">Commission de 12 % sur les réservations marketplace éligibles.</p></article>
+      <article className={`${managerPanel} border-[#B79B69]`}><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">Business</p><h3 className="mt-3 font-serif text-xl font-bold text-[#284C3B]">39 900 FCFA / mois</h3><p className="mt-3 text-sm text-[#59645B]">0 % de commission sur les réservations marketplace.</p></article>
+      <article className={managerPanel}><p className="text-xs font-bold uppercase tracking-widest text-[#B79B69]">Enterprise</p><h3 className="mt-3 font-serif text-xl font-bold text-[#284C3B]">Contrat personnalisé</h3><p className="mt-3 text-sm text-[#59645B]">Conditions, commission et statistiques gérées séparément avec votre interlocuteur TerangaSN.</p></article>
+    </div>
+
+    {subscription?.plan_code !== 'enterprise' && !businessActive && (
+      <section className="rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+        <h3 className="font-serif text-lg font-bold text-[#193E30]">Demander le passage à Business</h3>
+        <p className="mt-2 text-sm leading-6 text-[#59645B]">Créez d’abord une demande afin d’obtenir une référence unique. Effectuez ensuite le virement de 39 900 FCFA avec cette référence, puis joignez le justificatif. Business ne sera activé qu’après vérification et confirmation du paiement par TerangaSN.</p>
+        {paymentInstructions?.account_holder && paymentInstructions.bank_name && paymentInstructions.account_reference ? (
+          <div className="mt-4 rounded-xl border border-[#D5DFD3] bg-[#F7F9F5] p-4 text-sm">
+            <p className="font-bold text-[#284C3B]">Coordonnées officielles TerangaSN</p>
+            <p className="mt-2"><strong>Bénéficiaire :</strong> {paymentInstructions.account_holder}</p>
+            <p className="mt-1"><strong>Banque / opérateur :</strong> {paymentInstructions.bank_name}</p>
+            <p className="mt-1 break-all"><strong>Compte :</strong> {paymentInstructions.account_reference}</p>
+            {paymentInstructions.instructions && <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#59645B]">{paymentInstructions.instructions}</p>}
+          </div>
+        ) : <p role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Les coordonnées de paiement ne sont pas encore configurées. Contactez l’assistance TerangaSN avant tout transfert.</p>}
+        {pendingRequest ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            <p className="font-bold">{pendingRequest.status === 'awaiting_payment' ? 'Référence de virement créée' : 'Demande en cours de vérification'}</p>
+            <p className="mt-1">Référence {pendingRequest.reference} · {formatFCFA(pendingRequest.amount_xof)} · demande du {formatDate(pendingRequest.submitted_at)}</p>
+            {pendingRequest.status === 'awaiting_payment' ? (
+              <form onSubmit={event => void submitBusinessProof(event, pendingRequest.id)} className="mt-4 space-y-3">
+                <p>Après le transfert, joignez le justificatif pour transmettre la demande à l’équipe de vérification.</p>
+                <label className="block text-sm font-semibold text-[#284C3B]" htmlFor="business-payment-proof">Justificatif du virement</label>
+                <input id="business-payment-proof" type="file" accept=".pdf,image/jpeg,image/png,image/webp" required
+                  onChange={event => setProof(event.target.files?.[0] || null)}
+                  className="block w-full rounded-xl border border-[#D5DFD3] p-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#284C3B]" />
+                <button type="submit" disabled={submitting || !proof} className="rounded-xl bg-[#284C3B] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  {submitting ? 'Envoi en cours…' : 'Transmettre le justificatif'}
+                </button>
+              </form>
+            ) : <p className="mt-2">Le changement de formule attend la validation du virement par TerangaSN. Aucune activation n’est déclenchée par votre déclaration.</p>}
+          </div>
+        ) : (
+          <button type="button" onClick={() => void createBusinessRequest()} disabled={submitting || loading || !paymentInstructions?.account_holder || !paymentInstructions.bank_name || !paymentInstructions.account_reference} className="mt-4 rounded-xl bg-[#284C3B] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+            {submitting ? 'Création en cours…' : 'Créer une demande et obtenir ma référence'}
+          </button>
+        )}
+      </section>
+    )}
+
+    <section className="space-y-3 rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+      <h3 className="font-serif text-lg font-bold text-[#193E30]">Historique des changements de formule</h3>
+      {history.length === 0 ? <p className="text-sm text-[#6F756D]">Aucun changement enregistré.</p> : history.map(entry => (
+        <div key={entry.id} className="flex flex-wrap justify-between gap-2 border-t border-[#E9E2D5] pt-3 text-sm">
+          <span>{entry.previous_plan_code ? `${subscriptionPlanLabels[entry.previous_plan_code] || entry.previous_plan_code} → ` : 'Formule initiale · '}{subscriptionPlanLabels[entry.new_plan_code] || entry.new_plan_code}</span>
+          <span className="text-[#6F756D]">{formatDate(entry.effective_at)}{entry.period_end ? ` · jusqu’au ${formatDate(entry.period_end)}` : ''}</span>
+        </div>
+      ))}
+    </section>
+
+    {enterpriseContracts.length > 0 && <section className="space-y-3 rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+      <h3 className="font-serif text-lg font-bold text-[#193E30]">Contrats Enterprise</h3>
+      {enterpriseContracts.map(contract => {
+        const contractInvoices = invoices.filter(invoice => invoice.enterprise_contract_id === contract.id && invoice.status === 'paid');
+        const collected = contractInvoices.reduce((total, invoice) => total + Number(invoice.amount_xof), 0);
+        return <article key={contract.id} className="rounded-xl border border-[#E9E2D5] p-4">
+          <div className="flex flex-wrap justify-between gap-2">
+            <div>
+              <p className="font-mono text-sm font-bold text-[#193E30]">{contract.contract_reference}</p>
+              <p className="mt-1 text-xs text-[#647267]">{formatFCFA(contract.monthly_amount_xof)} / mois · {contract.marketplace_commission_pct}% de commission · {contract.status}</p>
+              <p className="mt-1 text-xs text-[#647267]">{formatDate(contract.starts_at)}{contract.ends_at ? ` → ${formatDate(contract.ends_at)}` : ' · sans échéance définie'}</p>
+            </div>
+            <div className="rounded-lg bg-[#EFF3ED] px-3 py-2 text-xs text-[#284C3B]">
+              <p>Factures réglées : <strong>{contractInvoices.length}</strong></p>
+              <p className="mt-1">Encaissé : <strong>{formatFCFA(collected)}</strong></p>
+            </div>
+          </div>
+          <details className="mt-3 text-xs">
+            <summary className="cursor-pointer font-bold text-[#284C3B]">Conditions contractuelles</summary>
+            <p className="mt-2 whitespace-pre-wrap leading-5 text-[#59645B]">{contract.terms}</p>
+          </details>
+        </article>;
+      })}
+    </section>}
+
+    <section className="space-y-3 rounded-2xl border border-[#E9E2D5] bg-white p-4 sm:p-5">
+      <h3 className="font-serif text-lg font-bold text-[#193E30]">Factures et paiements confirmés</h3>
+      {invoices.length === 0 ? <p className="text-sm text-[#6F756D]">Aucune facture émise.</p> : <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-left text-sm">
+          <thead className="border-b border-[#E9E2D5] text-xs text-[#647267]"><tr><th className="p-3">Facture</th><th className="p-3">Type</th><th className="p-3">Montant</th><th className="p-3">Statut</th><th className="p-3">Référence paiement</th><th className="p-3">Date</th></tr></thead>
+          <tbody className="divide-y divide-[#E9E2D5]">{invoices.map(invoice => {
+            const payment = payments.find(item => item.invoice_id === invoice.id);
+            return <tr key={invoice.id}>
+              <td className="p-3 font-mono text-xs">{invoice.invoice_number}</td>
+              <td className="p-3">{invoice.invoice_type === 'enterprise_contract' ? 'Contrat Enterprise' : 'Abonnement Business'}</td>
+              <td className="p-3">{formatFCFA(invoice.amount_xof)}</td>
+              <td className="p-3">{invoice.status === 'paid' ? 'Payée · paiement confirmé' : 'Annulée'}</td>
+              <td className="p-3">{payment?.payment_reference || '—'}{payment?.proof_path && (
+                proofLinks[payment.proof_path]
+                  ? <a href={proofLinks[payment.proof_path]} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs font-bold text-[#284C3B] underline">Ouvrir le justificatif</a>
+                  : <button type="button" onClick={() => { if (payment.proof_path) void openOwnerPaymentProof(payment.proof_path); }} className="ml-2 text-xs font-bold text-[#284C3B] underline">Charger le justificatif</button>
+              )}</td>
+              <td className="p-3">{formatDate(invoice.paid_at || invoice.issued_at)}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>}
+      {requests.some(request => request.status === 'approved' || request.status === 'rejected') && <div className="space-y-2 border-t border-[#E9E2D5] pt-3">
+        <h4 className="text-sm font-bold text-[#284C3B]">Demandes de paiement</h4>
+        {requests.filter(request => request.status === 'approved' || request.status === 'rejected').map(request => <div key={request.id} className="flex flex-wrap justify-between gap-2 text-xs">
+          <span>{request.reference} · {request.status === 'approved' ? 'Paiement confirmé' : 'Refusée'}{request.review_note ? ` · ${request.review_note}` : ''}</span>
+          <span className="text-[#6F756D]">{request.reviewed_at ? formatDate(request.reviewed_at) : ''}</span>
+        </div>)}
+      </div>}
+    </section>
+  </div>;
+};
 
 /* ========================================================================== */
 /* OVERVIEW                                                                   */
