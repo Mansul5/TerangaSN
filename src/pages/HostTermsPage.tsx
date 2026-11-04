@@ -181,7 +181,7 @@ export const HostTermsPage: React.FC<
 
   return (
     <div className="boly-page min-h-screen bg-[#f8f7f3] text-[#26342c]">
-      {/* Retour intégré à la page : la navigation globale Boly reste l’unique header. */}
+      {/* Retour intégré à la page : la navigation globale TerangaSN reste l’unique header. */}
       <section className="boly-container pb-8 pt-8 sm:pb-10 sm:pt-12">
         <button
           type="button"

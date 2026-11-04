@@ -307,6 +307,7 @@ export async function createBooking(
       p_guest_name: booking.guest_name,
       p_guest_phone: booking.guest_phone,
       p_special_requests: booking.special_requests ?? null,
+      p_expected_total_price: booking.total_price,
     });
 
     if (error) throw error;
@@ -1473,8 +1474,7 @@ export async function checkRoomAvailabilityRPC(
 }
 
 /**
- * 7. Calculate stay pricing including
- * date-specific price overrides.
+ * Calculate the exact stay price using unit, category, then base rates.
  */
 export async function calculateStayPricing(
   roomType: RoomType,
@@ -1483,9 +1483,12 @@ export async function calculateStayPricing(
   roomsCount: number = 1
 ): Promise<{
   totalPrice: number;
+  baseTotalPrice: number;
   averageNightlyPrice: number;
   nightsCount: number;
   hasSpecialRates: boolean;
+  hasCategoryWideSpecialRate: boolean;
+  hasUnitSpecificRates: boolean;
   minAvailable: number;
   nightlyBreakdown: {
     date: string;
@@ -1495,144 +1498,49 @@ export async function calculateStayPricing(
   }[];
 }> {
   try {
-    const { data } = await supabase
-      .from('room_availability')
-      .select(
-        'date, rooms_available, price_override'
-      )
-      .eq('room_type_id', roomType.id)
-      .gte('date', checkIn)
-      .lt('date', checkOut)
-      .order('date', {
-        ascending: true,
-      });
-
-    const availMap = new Map<
-      string,
-      {
-        rooms_available: number;
-        price_override: number | null;
-      }
-    >();
-
-    if (data) {
-      data.forEach((item) => {
-        availMap.set(item.date, {
-          rooms_available:
-            item.rooms_available,
-          price_override:
-            item.price_override,
-        });
-      });
+    const { data, error } = await supabase.rpc('preview_room_booking_price', {
+      p_room_type_id: roomType.id,
+      p_check_in: checkIn,
+      p_check_out: checkOut,
+      p_rooms_count: roomsCount,
+    });
+    if (error) throw error;
+    if (!data || typeof data !== 'object') {
+      throw new Error('Réponse de tarif inattendue.');
     }
 
-    const start = new Date(checkIn);
-    const end = new Date(checkOut);
-
-    const nightlyBreakdown: {
-      date: string;
-      price: number;
-      isOverride: boolean;
-      roomsAvailable: number;
-    }[] = [];
-
-    let totalPrice = 0;
-    let hasSpecialRates = false;
-    let minAvailable = roomType.total_rooms;
-
-    const curr = new Date(start);
-
-    while (curr < end) {
-      const dateStr =
-        curr.toISOString().split('T')[0];
-
-      const rec = availMap.get(dateStr);
-
-      const isOverride = Boolean(
-        rec &&
-          rec.price_override &&
-          rec.price_override > 0
-      );
-
-      const nightPrice = isOverride
-        ? (rec!.price_override as number)
-        : roomType.price_per_night;
-
-      const availableUnits = rec
-        ? rec.rooms_available
-        : roomType.total_rooms;
-
-      if (availableUnits < minAvailable) {
-        minAvailable = availableUnits;
-      }
-
-      if (isOverride) {
-        hasSpecialRates = true;
-      }
-
-      nightlyBreakdown.push({
-        date: dateStr,
-        price: nightPrice,
-        isOverride,
-        roomsAvailable: availableUnits,
-      });
-
-      totalPrice +=
-        nightPrice * roomsCount;
-
-      curr.setDate(
-        curr.getDate() + 1
-      );
+    const pricing = data as {
+      totalPrice: number;
+      baseTotalPrice: number;
+      averageNightlyPrice: number;
+      nightsCount: number;
+      hasSpecialRates: boolean;
+      hasCategoryWideSpecialRate: boolean;
+      hasUnitSpecificRates: boolean;
+      minAvailable: number;
+      nightlyBreakdown: {
+        date: string;
+        price: number;
+        isOverride: boolean;
+        roomsAvailable: number;
+      }[];
+    };
+    if (
+      !Number.isSafeInteger(pricing.totalPrice)
+      || !Number.isSafeInteger(pricing.baseTotalPrice)
+      || !Number.isFinite(pricing.averageNightlyPrice)
+      || !Number.isInteger(pricing.nightsCount)
+      || typeof pricing.hasSpecialRates !== 'boolean'
+      || typeof pricing.hasCategoryWideSpecialRate !== 'boolean'
+      || typeof pricing.hasUnitSpecificRates !== 'boolean'
+      || !Array.isArray(pricing.nightlyBreakdown)
+    ) {
+      throw new Error('Les informations de tarif du séjour sont incomplètes.');
     }
-
-    const nightsCount = Math.max(
-      1,
-      nightlyBreakdown.length
-    );
-
-    const averageNightlyPrice =
-      Math.round(
-        totalPrice /
-          (nightsCount * roomsCount)
-      );
-
-    return {
-      totalPrice,
-      averageNightlyPrice,
-      nightsCount,
-      hasSpecialRates,
-      minAvailable,
-      nightlyBreakdown,
-    };
-  } catch {
-    // Fallback if query fails
-    const start = new Date(checkIn);
-    const end = new Date(checkOut);
-
-    const diffDays = Math.max(
-      1,
-      Math.round(
-        (end.getTime() -
-          start.getTime()) /
-          86400000
-      )
-    );
-
-    const totalPrice =
-      roomType.price_per_night *
-      diffDays *
-      roomsCount;
-
-    return {
-      totalPrice,
-      averageNightlyPrice:
-        roomType.price_per_night,
-      nightsCount: diffDays,
-      hasSpecialRates: false,
-      minAvailable:
-        roomType.total_rooms,
-      nightlyBreakdown: [],
-    };
+    return pricing;
+  } catch (error) {
+    console.error('calculateStayPricing error:', error);
+    throw error;
   }
 }
 

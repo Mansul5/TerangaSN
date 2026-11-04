@@ -28,8 +28,11 @@ interface RoomCardProps {
   hotelCheckOutTime?: string;
   pricing?: {
     totalPrice: number;
+    baseTotalPrice?: number;
     averageNightlyPrice: number;
     hasSpecialRates: boolean;
+    hasCategoryWideSpecialRate?: boolean;
+    hasUnitSpecificRates?: boolean;
     minAvailable?: number;
     isAvailable?: boolean;
   };
@@ -45,9 +48,17 @@ export const RoomCard: React.FC<RoomCardProps> = ({
 }) => {
   const effectiveTotalPrice = pricing ? pricing.totalPrice : room.price_per_night * (nightsCount || 1);
   const effectiveNightlyPrice = pricing ? pricing.averageNightlyPrice : room.price_per_night;
+  const baseTotalPrice = pricing?.baseTotalPrice ?? effectiveTotalPrice;
+  const hasCategoryWideSpecialRate = Boolean(pricing?.hasCategoryWideSpecialRate);
+  const hasUnitSpecificRates = Boolean(pricing?.hasUnitSpecificRates);
+  const unitRatesVary = hasUnitSpecificRates && !hasCategoryWideSpecialRate;
+  const displayedTotalPrice = unitRatesVary ? baseTotalPrice : effectiveTotalPrice;
+  const displayedNightlyPrice = unitRatesVary ? room.price_per_night : effectiveNightlyPrice;
+  const discountPercent = hasCategoryWideSpecialRate && baseTotalPrice > effectiveTotalPrice
+    ? Math.round((baseTotalPrice - effectiveTotalPrice) * 100 / baseTotalPrice)
+    : 0;
   const isAvailable = pricing?.isAvailable !== undefined ? pricing.isAvailable : true;
   const minAvailable = pricing?.minAvailable;
-  const hasSpecialRates = Boolean(pricing?.hasSpecialRates);
 
   const getCancellationBadge = (policy: string) => {
     switch (policy) {
@@ -180,20 +191,29 @@ export const RoomCard: React.FC<RoomCardProps> = ({
             </p>
 
             <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5 min-[380px]:justify-end">
+              {discountPercent > 0 && (
+                <span className="text-sm text-[#89877D] line-through">{formatFCFA(baseTotalPrice)}</span>
+              )}
               <span className="break-words font-serif text-xl font-bold text-[#A18455] sm:text-2xl">
-                {formatFCFA(effectiveTotalPrice)}
+                {formatFCFA(displayedTotalPrice)}
               </span>
             </div>
+            {discountPercent > 0 && (
+              <p className="text-[11px] font-semibold text-emerald-700">Économisez {discountPercent}%</p>
+            )}
 
             <p className="mt-0.5 text-xs text-[#89877D]">
-              {formatFCFA(effectiveNightlyPrice)} / nuit (moy.)
+              {formatFCFA(displayedNightlyPrice)} / nuit (moy.)
             </p>
 
-            {hasSpecialRates && (
+            {hasCategoryWideSpecialRate && (
               <span className="mt-1 inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
                 <Tag size={11} />
                 <span>Tarif spécial appliqué</span>
               </span>
+            )}
+            {!hasCategoryWideSpecialRate && hasUnitSpecificRates && (
+              <p className="mt-1 text-[10px] text-[#74786F]">Tarif calculé selon les unités attribuées</p>
             )}
           </div>
 

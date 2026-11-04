@@ -320,6 +320,34 @@ export const HotelierDashboardPage: React.FC<
     return () => window.cancelAnimationFrame(frame);
   }, [activeSection]);
 
+  useEffect(() => {
+    let saveTimer = 0;
+    const savePosition = () => {
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(() => {
+        dashboardScrollPositions.current[activeSection] = window.innerWidth < 1024
+          ? window.scrollY
+          : dashboardMainRef.current?.scrollTop || 0;
+        try {
+          window.sessionStorage.setItem(
+            `terangasn.hotelierScroll.${user?.id || 'owner'}`,
+            JSON.stringify(dashboardScrollPositions.current),
+          );
+        } catch {
+          // Session storage is optional; the dashboard remains usable without it.
+        }
+      }, 120);
+    };
+    const main = dashboardMainRef.current;
+    window.addEventListener('scroll', savePosition, { passive: true });
+    main?.addEventListener('scroll', savePosition, { passive: true });
+    return () => {
+      window.clearTimeout(saveTimer);
+      window.removeEventListener('scroll', savePosition);
+      main?.removeEventListener('scroll', savePosition);
+    };
+  }, [activeSection, user?.id]);
+
   // ---------------------------------------------------------------------------
   // New room / offer
   // ---------------------------------------------------------------------------

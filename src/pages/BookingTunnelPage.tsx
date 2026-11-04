@@ -22,6 +22,7 @@ interface BookingTunnelPageProps {
 
 type Pricing = {
   totalPrice: number;
+  baseTotalPrice: number;
   averageNightlyPrice: number;
   hasSpecialRates: boolean;
   nightlyBreakdown: { date: string; price: number; isOverride: boolean; roomsAvailable: number }[];
@@ -48,6 +49,7 @@ export const BookingTunnelPage: React.FC<BookingTunnelPageProps> = ({
   const [pricingVerified, setPricingVerified] = useState(false);
   const [stayPricing, setStayPricing] = useState<Pricing>({
     totalPrice: initialTotalPrice,
+    baseTotalPrice: roomType.price_per_night * nightsCount * roomsCount,
     averageNightlyPrice: roomType.price_per_night,
     hasSpecialRates: false,
     nightlyBreakdown: [],
@@ -75,6 +77,7 @@ export const BookingTunnelPage: React.FC<BookingTunnelPageProps> = ({
       setMinAvailableRooms(availability.minAvailable || 0);
       setStayPricing({
         totalPrice: pricing.totalPrice,
+        baseTotalPrice: pricing.baseTotalPrice,
         averageNightlyPrice: pricing.averageNightlyPrice,
         hasSpecialRates: pricing.hasSpecialRates,
         nightlyBreakdown: pricing.nightlyBreakdown,
@@ -92,7 +95,7 @@ export const BookingTunnelPage: React.FC<BookingTunnelPageProps> = ({
   }, [roomType, checkIn, checkOut, roomsCount]);
 
   const effectiveTotalPrice = pricingVerified ? stayPricing.totalPrice : initialTotalPrice;
-  const validStay = roomsCount > 0 && nightsCount > 0 && adults > 0 && checkIn < checkOut && effectiveTotalPrice > 0;
+  const validStay = roomsCount > 0 && nightsCount > 0 && adults > 0 && checkIn < checkOut && effectiveTotalPrice >= 0;
   const canSubmit = isAvailable && pricingVerified && !isCheckingAvailability && validStay && !isSubmitting;
   // Commission interne : ne s'ajoute jamais au prix payé par le voyageur.
   const commissionRate = hotel.commission_rate ?? 0.1;
@@ -129,12 +132,13 @@ export const BookingTunnelPage: React.FC<BookingTunnelPageProps> = ({
       }
       // Le tarif affiché et enregistré provient de la même vérification du séjour.
       const refreshedPrice = await calculateStayPricing(roomType, checkIn, checkOut, roomsCount);
-      if (!Number.isFinite(refreshedPrice.totalPrice) || refreshedPrice.totalPrice <= 0) {
+      if (!Number.isFinite(refreshedPrice.totalPrice) || refreshedPrice.totalPrice < 0) {
         throw new Error('Le tarif ne peut pas être confirmé pour ce séjour.');
       }
       if (refreshedPrice.totalPrice !== effectiveTotalPrice) {
         setStayPricing({
           totalPrice: refreshedPrice.totalPrice,
+          baseTotalPrice: refreshedPrice.baseTotalPrice,
           averageNightlyPrice: refreshedPrice.averageNightlyPrice,
           hasSpecialRates: refreshedPrice.hasSpecialRates,
           nightlyBreakdown: refreshedPrice.nightlyBreakdown,
@@ -247,7 +251,7 @@ export const BookingTunnelPage: React.FC<BookingTunnelPageProps> = ({
           {isAvailable && minAvailableRooms > 0 && minAvailableRooms <= 3 && <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">{minAvailableRooms} chambre{minAvailableRooms > 1 ? 's' : ''} disponible{minAvailableRooms > 1 ? 's' : ''} au minimum sur la période consultée.</p>}
           {pricingVerified && stayPricing.hasSpecialRates && <p className="rounded-xl bg-[#F8F7F3] px-3 py-2 text-xs text-[#5D645B]">Des tarifs particuliers s'appliquent à certaines nuits de votre séjour.</p>}
           {pricingVerified && stayPricing.nightlyBreakdown.length > 0 && <details className="rounded-xl border border-[#E8E2D6] p-3 text-xs"><summary className="cursor-pointer font-semibold text-[#193E30]">Voir le détail des nuits</summary><div className="mt-3 max-h-44 space-y-2 overflow-y-auto">{stayPricing.nightlyBreakdown.map((night, index) => <div key={`${night.date}-${index}`} className="flex justify-between gap-3"><span>Nuit du {formatDate(night.date)}{night.isOverride ? ' · tarif spécial' : ''}</span><span className="shrink-0 font-semibold">{formatFCFA(night.price)}</span></div>)}</div></details>}
-          <div className="space-y-2 border-t border-[#E8E2D6] pt-5"><div className="flex flex-wrap items-end justify-between gap-3"><span className="font-semibold">Total du séjour</span><strong className="font-serif text-2xl text-[#193E30]">{formatFCFA(effectiveTotalPrice)}</strong></div><p className="flex items-start gap-2 text-xs leading-5 text-[#74786F]"><Info size={14} className="mt-0.5 shrink-0"/> Montant du séjour calculé selon les tarifs disponibles. Les modalités de paiement seront précisées par l'établissement.</p></div>
+          <div className="space-y-2 border-t border-[#E8E2D6] pt-5"><div className="flex flex-wrap items-end justify-between gap-3"><span className="font-semibold">Total du séjour</span><div className="text-right">{pricingVerified && stayPricing.totalPrice < stayPricing.baseTotalPrice && <p className="text-sm text-[#89877D] line-through">{formatFCFA(stayPricing.baseTotalPrice)}</p>}<strong className="font-serif text-2xl text-[#193E30]">{formatFCFA(effectiveTotalPrice)}</strong>{pricingVerified && stayPricing.totalPrice < stayPricing.baseTotalPrice && <p className="text-xs font-semibold text-emerald-700">Économie de {Math.round((stayPricing.baseTotalPrice - stayPricing.totalPrice) * 100 / stayPricing.baseTotalPrice)}%</p>}</div></div><p className="flex items-start gap-2 text-xs leading-5 text-[#74786F]"><Info size={14} className="mt-0.5 shrink-0"/> Montant du séjour calculé selon les tarifs disponibles. Les modalités de paiement seront précisées par l'établissement.</p></div>
           <div className="flex gap-2 rounded-xl border border-[#E8E2D6] p-3 text-xs text-[#5D645B]"><CreditCard size={17} className="shrink-0 text-[#193E30]"/><span>Aucun paiement en ligne requis pour transmettre cette demande.</span></div>
         </div></aside>
       </div>

@@ -395,7 +395,7 @@ VALUES
             </div>
             <div>
               <h3 className="font-serif font-bold text-lg">Configuration Supabase Postgres</h3>
-              <p className="text-xs text-[#D1DBC2]">Teranga Booking Sénégal • Auth, Base de données & Stockage</p>
+              <p className="text-xs text-[#D1DBC2]">TerangaSN • Auth, base de données & stockage</p>
             </div>
           </div>
           <button

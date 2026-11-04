@@ -35,7 +35,6 @@ import {
   fetchRoomUnits,
   PhysicalRoomUnit,
   RoomUnitOccupancy,
-  setPhysicalRoomSalesStatus,
   updateRoomUnit,
 } from '@/src/lib/supabase/api';
 
@@ -44,6 +43,12 @@ type CalendarDay = RoomAvailability & {
   sales_closed: boolean;
   booked_rooms: number;
   remaining_rooms: number;
+  closure_reason?: string | null;
+  reason?: string | null;
+  active_units?: number;
+  special_units?: number;
+  special_unit_min_price?: number | null;
+  special_unit_max_price?: number | null;
 };
 
 import { formatFCFA, formatDate } from '@/src/lib/formatters';
@@ -162,6 +167,11 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
   const activeRoom = rooms.find(r => r.id === selectedRoomId) || rooms[0] || null;
 
+  useEffect(() => {
+    setSelectedPhysicalUnitIds([]);
+    setCalendarScope('category');
+  }, [activeRoom?.id]);
+
 
 
   // Calendar View State: Current month/year
@@ -201,13 +211,18 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
   const [physicalUnits, setPhysicalUnits] = useState<PhysicalRoomUnit[]>([]);
   const [physicalOccupancy, setPhysicalOccupancy] = useState<RoomUnitOccupancy[]>([]);
   const [closedPhysicalUnits, setClosedPhysicalUnits] = useState<Map<string, string | null>>(new Map());
+  const [physicalRangeClosedUnitIds, setPhysicalRangeClosedUnitIds] = useState<Set<string>>(new Set());
+  const [physicalUnitRates, setPhysicalUnitRates] = useState<Map<string, { price: number; reason: string | null }>>(new Map());
+  const [physicalRangeRateUnitIds, setPhysicalRangeRateUnitIds] = useState<Set<string>>(new Set());
+  const [selectedPhysicalUnitIds, setSelectedPhysicalUnitIds] = useState<string[]>([]);
+  const [calendarScope, setCalendarScope] = useState<'category' | 'units'>('category');
   const [physicalUnitsLoading, setPhysicalUnitsLoading] = useState(false);
   const [physicalUnitsError, setPhysicalUnitsError] = useState<string | null>(null);
   const [physicalUnitActionId, setPhysicalUnitActionId] = useState<string | null>(null);
   const [physicalUnitActionError, setPhysicalUnitActionError] = useState<string | null>(null);
   const [reassignmentTargets, setReassignmentTargets] = useState<Record<string, string>>({});
   const [physicalUnitLabels, setPhysicalUnitLabels] = useState<Record<string, { code: string; name: string }>>({});
-  const [physicalBlockReason, setPhysicalBlockReason] = useState('Maintenance');
+  const [physicalBlockReason, setPhysicalBlockReason] = useState('');
   const [showBookingsModal, setShowBookingsModal] = useState(false);
   const [monthBookings, setMonthBookings] = useState<CalendarBookingDetail[]>([]);
   const [monthBookingsLoading, setMonthBookingsLoading] = useState(false);
@@ -250,6 +265,9 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
       setPhysicalUnits([]);
       setPhysicalOccupancy([]);
       setClosedPhysicalUnits(new Map());
+      setPhysicalRangeClosedUnitIds(new Set());
+      setPhysicalUnitRates(new Map());
+      setPhysicalRangeRateUnitIds(new Set());
       return;
     }
 
@@ -260,7 +278,8 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
       if (unitsError) throw unitsError;
       const activeUnits = units.filter((unit) => unit.is_active);
       const unitIds = activeUnits.map((unit) => unit.id);
-      const [{ data: occupancy, error: occupancyError }, { data: closures, error: closuresError }] = await Promise.all([
+      const endDate = rangeEnd || rangeStart;
+      const [{ data: occupancy, error: occupancyError }, { data: closures, error: closuresError }, { data: rangeClosures, error: rangeClosuresError }, { data: rates, error: ratesError }, { data: rangeRates, error: rangeRatesError }] = await Promise.all([
         fetchRoomUnitOccupancy(unitIds),
         unitIds.length
           ? supabase.from('room_unit_availability')
@@ -269,9 +288,33 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
             .eq('date', rangeStart)
             .eq('sales_closed', true)
           : Promise.resolve({ data: [], error: null }),
+        unitIds.length
+          ? supabase.from('room_unit_availability')
+            .select('room_unit_id,date')
+            .in('room_unit_id', unitIds)
+            .gte('date', rangeStart)
+            .lte('date', endDate)
+            .eq('sales_closed', true)
+          : Promise.resolve({ data: [], error: null }),
+        unitIds.length
+          ? supabase.from('room_unit_rate_overrides')
+            .select('room_unit_id,price_override,reason')
+            .in('room_unit_id', unitIds)
+            .eq('date', rangeStart)
+          : Promise.resolve({ data: [], error: null }),
+        unitIds.length
+          ? supabase.from('room_unit_rate_overrides')
+            .select('room_unit_id,date')
+            .in('room_unit_id', unitIds)
+            .gte('date', rangeStart)
+            .lte('date', endDate)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (occupancyError) throw occupancyError;
       if (closuresError) throw closuresError;
+      if (rangeClosuresError) throw rangeClosuresError;
+      if (ratesError) throw ratesError;
+      if (rangeRatesError) throw rangeRatesError;
       setPhysicalUnits(activeUnits);
       setPhysicalOccupancy(occupancy);
       setPhysicalUnitLabels(Object.fromEntries(activeUnits.map((unit) => [
@@ -281,15 +324,30 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
       setClosedPhysicalUnits(new Map(
         (closures || []).map((item: { room_unit_id: string; reason: string | null }) => [item.room_unit_id, item.reason])
       ));
+      setPhysicalRangeClosedUnitIds(new Set(
+        (rangeClosures || []).map((item: { room_unit_id: string }) => item.room_unit_id)
+      ));
+      setPhysicalUnitRates(new Map(
+        (rates || []).map((item: { room_unit_id: string; price_override: number; reason: string | null }) => [
+          item.room_unit_id,
+          { price: Number(item.price_override), reason: item.reason },
+        ])
+      ));
+      setPhysicalRangeRateUnitIds(new Set(
+        (rangeRates || []).map((item: { room_unit_id: string }) => item.room_unit_id)
+      ));
     } catch (error) {
       setPhysicalUnits([]);
       setPhysicalOccupancy([]);
       setClosedPhysicalUnits(new Map());
+      setPhysicalRangeClosedUnitIds(new Set());
+      setPhysicalUnitRates(new Map());
+      setPhysicalRangeRateUnitIds(new Set());
       setPhysicalUnitsError(error instanceof Error ? error.message : 'Impossible de charger les chambres physiques.');
     } finally {
       setPhysicalUnitsLoading(false);
     }
-  }, [activeRoom?.id, rangeStart]);
+  }, [activeRoom?.id, rangeStart, rangeEnd]);
 
   useEffect(() => {
     void refreshPhysicalUnits();
@@ -332,10 +390,12 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
     start.setDate(start.getDate() - 7);
     const end = new Date(year, month + 1, 0);
     end.setDate(end.getDate() + 14);
-    const startDate = toDateString(start.getFullYear(), start.getMonth(), start.getDate());
-    const endDate = toDateString(end.getFullYear(), end.getMonth(), end.getDate());
+    let startDate = toDateString(start.getFullYear(), start.getMonth(), start.getDate());
+    let endDate = toDateString(end.getFullYear(), end.getMonth(), end.getDate());
+    if (rangeStart && rangeStart < startDate) startDate = rangeStart;
+    if (rangeEnd && rangeEnd > endDate) endDate = rangeEnd;
     const [{ data, error }, { data: units, error: unitsError }, { data: bookings, error: bookingsError }] = await Promise.all([
-      supabase.rpc('get_room_calendar_status', {
+      supabase.rpc('get_room_calendar_status_v2', {
       p_room_type_id: roomId,
       p_start_date: startDate,
       p_end_date: endDate,
@@ -374,7 +434,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
         room_type_id: roomId,
         rooms_available: capacity,
         booked_rooms: booked,
-        remaining_rooms: Math.max(0, capacity - booked),
+        remaining_rooms: Boolean(day.sales_closed) ? 0 : Math.max(0, capacity - booked),
         configured: Boolean(day.configured),
         sales_closed: Boolean(day.sales_closed),
       };
@@ -399,7 +459,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
       })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
-  }, [activeRoom?.id, currentDate]);
+  }, [activeRoom?.id, currentDate, rangeStart, rangeEnd]);
 
   // Read actual bookings for the selected night. Checkout is exclusive.
   useEffect(() => {
@@ -593,7 +653,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
         setEditRoomsCount(existing.rooms_available);
 
-        setEditPriceOverride(existing.price_override ? String(existing.price_override) : '');
+        setEditPriceOverride(existing.price_override !== null ? String(existing.price_override) : '');
 
       } else {
 
@@ -637,7 +697,54 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
 
 
-  // Close or reopen marketplace sales using the atomic, owner-authorized SQL RPC.
+  const runCalendarAction = async (
+    action: 'close_sales' | 'reopen_sales' | 'set_price' | 'remove_price' | 'set_capacity',
+    roomUnitIds: string[] | null = null,
+    priceOverride: number | null = null,
+    roomsAvailable: number | null = null,
+  ) => {
+    if (!activeRoom || !rangeStart || isSaving) return;
+    const start = rangeStart;
+    const end = rangeEnd || rangeStart;
+    setIsSaving(true);
+    setFeedbackMsg(null);
+    try {
+      const { error } = await supabase.rpc('set_room_calendar_action', {
+        p_room_type_id: activeRoom.id,
+        p_start_date: start,
+        p_end_date: end,
+        p_action: action,
+        p_room_unit_ids: roomUnitIds,
+        p_rooms_available: roomsAvailable,
+        p_price_override: priceOverride,
+        p_reason: physicalBlockReason.trim() || null,
+      });
+      if (error) throw error;
+      const refreshed = await readAvailability(activeRoom.id, currentDate);
+      setAvailabilityList(refreshed);
+      await refreshPhysicalUnits();
+      const target = roomUnitIds
+        ? `${roomUnitIds.length} unité${roomUnitIds.length > 1 ? 's' : ''}`
+        : 'toute la catégorie';
+      const labels: Record<typeof action, string> = {
+        close_sales: 'Ventes fermées',
+        reopen_sales: 'Ventes rouvertes',
+        set_price: 'Tarif spécial appliqué',
+        remove_price: 'Tarif spécial retiré',
+        set_capacity: 'Capacité mise à jour',
+      };
+      setFeedbackMsg({ type: 'success', text: `${labels[action]} pour ${target}, du ${formatDate(start)} au ${formatDate(end)}.` });
+      setSelectedPhysicalUnitIds([]);
+    } catch (error) {
+      setFeedbackMsg({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Impossible de modifier le calendrier.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // rooms_available is the SALES CAPACITY, not the remaining inventory.
   const handleSetSalesStatus = async (closeSales: boolean) => {
     if (!activeRoom || !rangeStart || isSaving) return;
@@ -645,57 +752,19 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
     const end = rangeEnd || rangeStart;
     const selected = availabilityList.filter(day => day.date >= start && day.date <= end);
     if (start < toDateString(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) return;
-    if (closeSales ? selected.some(day => day.sales_closed) : selected.some(day => !day.sales_closed)) return;
-    setIsSaving(true);
-    setFeedbackMsg(null);
-    try {
-      const { error } = await supabase.rpc('set_room_sales_status', {
-        p_room_type_id: activeRoom.id,
-        p_start_date: start,
-        p_end_date: end,
-        p_close_sales: closeSales,
-      });
-      if (error) throw error;
-
-      // Reload authoritative values, including seasonal prices.
-      const data = await readAvailability(activeRoom.id, currentDate);
-      setAvailabilityList(data);
-      setFeedbackMsg({
-        type: 'success',
-        text: closeSales
-          ? `Nouvelles ventes fermées du ${formatDate(start)} au ${formatDate(end)}. Réservations existantes conservées.`
-          : `Ventes rouvertes du ${formatDate(start)} au ${formatDate(end)} dans la limite des chambres physiques.`,
-      });
-      handleClearSelection();
-    } catch (err: any) {
-      setFeedbackMsg({ type: 'error', text: err?.message || 'Impossible de modifier les ventes.' });
-    } finally {
-      setIsSaving(false);
-    }
+    if (closeSales ? selected.every(day => day.sales_closed) : !selected.some(day => day.sales_closed)) return;
+    await runCalendarAction(closeSales ? 'close_sales' : 'reopen_sales');
   };
 
   const handleApplyBlock = () => handleSetSalesStatus(true);
   const handleApplyRestoreCapacity = () => handleSetSalesStatus(false);
 
-  const handleSetPhysicalRoomStatus = async (unit: PhysicalRoomUnit, closeSales: boolean) => {
-    if (!rangeStart || physicalUnitActionId) return;
-    setPhysicalUnitActionId(unit.id);
-    setPhysicalUnitActionError(null);
-    try {
-      const { error } = await setPhysicalRoomSalesStatus({
-        roomUnitId: unit.id,
-        startDate: rangeStart,
-        endDate: rangeStart,
-        closeSales,
-        reason: closeSales ? physicalBlockReason : null,
-      });
-      if (error) throw error;
-      await refreshPhysicalUnits();
-    } catch (error) {
-      setPhysicalUnitActionError(error instanceof Error ? error.message : 'Impossible de modifier cette chambre.');
-    } finally {
-      setPhysicalUnitActionId(null);
-    }
+  const handleSetSelectedUnitsStatus = async (closeSales: boolean) => {
+    if (!selectedPhysicalUnitIds.length) return;
+    await runCalendarAction(
+      closeSales ? 'close_sales' : 'reopen_sales',
+      selectedPhysicalUnitIds,
+    );
   };
 
   const handleReassignPhysicalRoom = async (bookingId: string, oldUnitId: string) => {
@@ -754,8 +823,14 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
       return;
     }
     const priceNum = editPriceOverride.trim() === '' ? null : Number(editPriceOverride);
-    if (changePrice && priceNum !== null && (!Number.isSafeInteger(priceNum) || priceNum <= 0)) {
-      setFeedbackMsg({ type: 'error', text: 'Le tarif spécial doit être un entier positif en FCFA.' });
+    if (changePrice && priceNum !== null && (!Number.isSafeInteger(priceNum) || priceNum < 0)) {
+      setFeedbackMsg({ type: 'error', text: 'Le tarif spécial doit être un montant entier positif ou nul en FCFA.' });
+      return;
+    }
+    if (changePrice && priceNum === null && !availabilityList.some(day =>
+      day.date >= start && day.date <= end && day.price_override !== null
+    )) {
+      setFeedbackMsg({ type: 'error', text: 'Aucun tarif spécial n’existe sur cette période à retirer.' });
       return;
     }
     setIsSaving(true);
@@ -768,6 +843,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
         p_rooms_available: changeCapacity ? editRoomsCount : null,
         p_price_override: changePrice ? priceNum : null,
         p_update_price: changePrice,
+        p_reason: physicalBlockReason.trim() || null,
       });
       if (error) throw error;
       const saved = await readAvailability(activeRoom.id, currentDate);
@@ -915,8 +991,11 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
   const blockedDaysCount = monthAvailList.filter(a => a.sales_closed).length;
 
-  const specialRatesCount = monthAvailList.filter(a => a.price_override !== null && a.price_override > 0).length;
-  const selectedCalendarDay = rangeStart && !rangeEnd ? availMap.get(rangeStart) : null;
+  const specialRatesCount = monthAvailList.filter(a =>
+    a.price_override !== null
+    || Boolean(a.active_units && a.active_units > 0 && a.special_units === a.active_units)
+  ).length;
+  const selectedCalendarDay = rangeStart ? availMap.get(rangeStart) : null;
   const selectedBooked = selectedCalendarDay?.booked_rooms ?? 0;
   const selectedRemaining = selectedCalendarDay?.remaining_rooms ?? 0;
   const selectedClosed = Boolean(selectedCalendarDay?.sales_closed);
@@ -1122,7 +1201,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
       <section className="rounded-[26px] border border-[#E4E9E1] bg-white p-4 shadow-sm sm:p-6" aria-label="Planning des séjours">
         <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#A17A42]">Boly · Gestion des séjours</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#A17A42]">TerangaSN · Gestion des séjours</p>
             <h4 className="mt-1 font-serif text-xl font-semibold text-[#244A39]">Calendrier PMS · {calendarView === 'simple' ? 'Vue simple' : calendarView === 'visual' ? 'Vue visuelle' : 'Vue détaillée'}</h4>
             <p className="mt-1 text-xs text-[#69786D]">Séjours en attente ou confirmés · {activeRoom.name} · arrivée incluse, départ exclu</p>
           </div>
@@ -1450,8 +1529,19 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                 const roomsAvail = avail !== undefined ? avail.rooms_available : null;
 
                 const priceOverride = avail?.price_override;
-
-                const effectivePrice = priceOverride && priceOverride > 0 ? priceOverride : activeRoom.price_per_night;
+                const allUnitsSpecial = Boolean(
+                  avail?.active_units
+                  && avail.active_units > 0
+                  && avail.special_units === avail.active_units
+                );
+                const sameUnitRate = allUnitsSpecial
+                  && avail?.special_unit_min_price === avail.special_unit_max_price;
+                const hasSpecialPrice = priceOverride !== null && priceOverride !== undefined || allUnitsSpecial;
+                const effectivePrice = priceOverride !== null && priceOverride !== undefined
+                  ? priceOverride
+                  : sameUnitRate && avail?.special_unit_min_price !== null && avail?.special_unit_min_price !== undefined
+                    ? avail.special_unit_min_price
+                    : activeRoom.price_per_night;
 
                 const isBlocked = Boolean(avail?.sales_closed);
                 // Sans exception enregistrée, la RPC calcule la disponibilité
@@ -1460,10 +1550,6 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                 const booked = avail?.booked_rooms ?? 0;
                 const isFull = !isBlocked && remaining === 0;
                 const isPartial = !isBlocked && booked > 0 && remaining > 0;
-
-                const hasSpecialPrice = Boolean(priceOverride && priceOverride > 0);
-
-
 
                 // Range selection styling
 
@@ -1525,6 +1611,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                     type="button"
 
                     disabled={cell.isPast && !cell.isCurrentMonth}
+                    title={isBlocked && avail?.closure_reason ? `Fermeture : ${avail.closure_reason}` : hasSpecialPrice && avail?.reason ? `Tarif spécial : ${avail.reason}` : hasSpecialPrice && allUnitsSpecial && (priceOverride === null || priceOverride === undefined) ? 'Tarif spécial sur toutes les unités' : ''}
 
                     onClick={() => handleDateClick(cell.dateStr)}
 
@@ -1602,9 +1689,16 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
                       }`}>
 
-                        {formatFCFA(effectivePrice)}
-
+                        {allUnitsSpecial && !sameUnitRate && (priceOverride === null || priceOverride === undefined)
+                          ? 'Prix spécial'
+                          : formatFCFA(effectivePrice)}
                       </span>
+                      {hasSpecialPrice && (priceOverride !== null && priceOverride !== undefined || sameUnitRate) && effectivePrice < activeRoom.price_per_night && (
+                        <span className="block text-[9px] text-[#8C887D] line-through">{formatFCFA(activeRoom.price_per_night)}</span>
+                      )}
+                      {hasSpecialPrice && (priceOverride !== null && priceOverride !== undefined || sameUnitRate) && effectivePrice < activeRoom.price_per_night && (
+                        <span className="block text-[9px] text-[#8C887D]">−{Math.round((activeRoom.price_per_night - effectivePrice) * 100 / activeRoom.price_per_night)}%</span>
+                      )}
 
                     </div>
 
@@ -1747,7 +1841,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
 
               {/* Category totals and individually managed physical rooms. */}
-              {!rangeEnd && selectedCalendarDay && (
+              {selectedCalendarDay && (
                 <div className="space-y-3 rounded-2xl border border-[#E6E2D3] bg-[#FAF9F6] p-3 text-xs">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-bold text-[#2D2A26]">Disponibilité de la catégorie</span>
@@ -1759,24 +1853,47 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                     <div className="rounded-xl bg-rose-50 p-2 text-rose-800"><strong className="block text-lg">{selectedBlocked}</strong>Bloquée(s) / hors vente</div>
                   </div>
                   <p className="text-[10px] text-[#6B6658]">{selectedClosed ? 'Ventes de toute la catégorie fermées : les réservations existantes sont conservées.' : selectedRemaining === 0 ? 'Aucune nouvelle réservation possible pour cette date.' : 'Les chambres libres peuvent être réservées.'}</p>
-                  {!selectedCalendarDay.configured && <p className="text-[10px] text-[#6B6658]">Capacité par défaut : aucune modification manuelle n’a été enregistrée pour cette date.</p>}
+                  {selectedClosed && selectedCalendarDay.closure_reason && (
+                    <p className="text-[10px] text-[#6B6658]">Motif de fermeture : {selectedCalendarDay.closure_reason}</p>
+                  )}
+                  {selectedCalendarDay.price_override !== null && (
+                    <p className="text-[10px] text-[#6B6658]">
+                      Tarif spécial de la catégorie : {selectedCalendarDay.price_override < activeRoom.price_per_night && (
+                        <><s>{formatFCFA(activeRoom.price_per_night)}</s> · </>
+                      )}
+                      {formatFCFA(selectedCalendarDay.price_override)} / nuit
+                      {selectedCalendarDay.price_override < activeRoom.price_per_night
+                        ? ` · −${Math.round((activeRoom.price_per_night - selectedCalendarDay.price_override) * 100 / activeRoom.price_per_night)}%`
+                        : ''}
+                      {selectedCalendarDay.reason ? ` · ${selectedCalendarDay.reason}` : ''}
+                    </p>
+                  )}
+                  {!selectedCalendarDay.configured && <p className="text-[10px] text-[#6B6658]">Capacité par défaut : aucun ajustement de capacité de la catégorie pour cette date.</p>}
                   <div className="space-y-2 border-t border-[#E6E2D3] pt-3">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <strong className="text-[#2D2A26]">Chambres physiques</strong>
-                      <span className="text-[10px] text-[#6B6658]">Les actions concernent une chambre seulement</span>
+                      <span className="text-[10px] text-[#6B6658]">État au {formatDate(rangeStart)}</span>
+                      <label className="flex items-center gap-2 text-[10px] font-semibold text-[#6B6658]">
+                        Périmètre
+                        <select
+                          value={calendarScope}
+                          onChange={(event) => setCalendarScope(event.target.value as 'category' | 'units')}
+                          className="rounded-lg border border-[#D8DED3] bg-white px-2 py-1.5 text-xs text-[#2D2A26]"
+                        >
+                          <option value="category">Toute la catégorie</option>
+                          <option value="units">Unités sélectionnées</option>
+                        </select>
+                      </label>
                     </div>
-                    <label className="flex items-center gap-2 text-[10px] font-semibold text-[#6B6658]">
-                      Motif de blocage
-                      <select
+                    <label className="block space-y-1 text-[10px] font-semibold text-[#6B6658]">
+                      Motif facultatif
+                      <input
                         value={physicalBlockReason}
+                        maxLength={300}
                         onChange={(event) => setPhysicalBlockReason(event.target.value)}
-                        className="rounded-lg border border-[#D8DED3] bg-white px-2 py-1.5 text-xs text-[#2D2A26]"
-                      >
-                        <option>Maintenance</option>
-                        <option>Travaux</option>
-                        <option>Nettoyage</option>
-                        <option>Autre</option>
-                      </select>
+                        placeholder="Ex. maintenance, événement, réduction…"
+                        className="w-full rounded-lg border border-[#D8DED3] bg-white px-2 py-2 text-xs text-[#2D2A26]"
+                      />
                     </label>
                     {physicalUnitsLoading && <p className="flex items-center gap-2 text-[#6B6658]"><Loader2 size={14} className="animate-spin"/>Chargement des chambres…</p>}
                     {physicalUnitsError && <p role="alert" className="text-rose-700">{physicalUnitsError}</p>}
@@ -1791,6 +1908,16 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                           && entry.check_out > rangeStart
                         );
                         const blocked = closedPhysicalUnits.has(unit.id);
+                        const categoryClosed = Boolean(selectedCalendarDay?.sales_closed);
+                        const unitUnavailable = blocked || categoryClosed;
+                        const unitRate = physicalUnitRates.get(unit.id);
+                        const categoryRate = selectedCalendarDay?.price_override;
+                        const effectiveUnitRate = unitRate?.price ?? categoryRate ?? activeRoom.price_per_night;
+                        const hasUnitSpecialRate = unitRate !== undefined || categoryRate !== null && categoryRate !== undefined;
+                        const unitSavings = effectiveUnitRate < activeRoom.price_per_night
+                          ? Math.round((activeRoom.price_per_night - effectiveUnitRate) * 100 / activeRoom.price_per_night)
+                          : 0;
+                        const unitSelected = selectedPhysicalUnitIds.includes(unit.id);
                         const label = unit.unit_name || unit.unit_code || 'Chambre';
                         const targets = occupant
                           ? physicalUnits.filter((target) =>
@@ -1804,7 +1931,17 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                           )
                           : [];
                         return (
-                          <article key={unit.id} className={`space-y-2 rounded-xl border p-3 ${occupant ? 'border-sky-200 bg-sky-50' : blocked ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                          <article key={unit.id} className={`space-y-2 rounded-xl border p-3 ${occupant ? 'border-sky-200 bg-sky-50' : unitUnavailable ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                            <label className="flex items-center gap-2 text-[10px] font-semibold text-[#284C3B]">
+                              <input
+                                type="checkbox"
+                                checked={unitSelected}
+                                onChange={(event) => setSelectedPhysicalUnitIds((previous) => event.target.checked
+                                  ? [...previous, unit.id]
+                                  : previous.filter((id) => id !== unit.id))}
+                              />
+                              Inclure dans les actions de la période
+                            </label>
                             <div className="grid gap-2 sm:grid-cols-2">
                               <label className="space-y-1">
                                 <span className="block text-[10px] font-semibold text-[#6B6658]">Numéro / code</span>
@@ -1845,9 +1982,23 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <strong className="block text-[#2D2A26]">{label}</strong>
-                                <span className="text-[10px] text-[#6B6658]">{occupant ? `Réservée · ${occupant.guest_name} · ${occupant.booking_number}` : blocked ? `Bloquée${closedPhysicalUnits.get(unit.id) ? ` · ${closedPhysicalUnits.get(unit.id)}` : ''}` : 'Disponible'}</span>
+                                <span className="text-[10px] text-[#6B6658]">
+                                  {occupant
+                                    ? `Réservée · ${occupant.guest_name} · ${occupant.booking_number}${categoryClosed ? ' · ventes de la catégorie fermées' : blocked ? ` · ventes de l’unité fermées${closedPhysicalUnits.get(unit.id) ? ` · ${closedPhysicalUnits.get(unit.id)}` : ''}` : ''}`
+                                    : categoryClosed
+                                      ? `Ventes fermées pour toute la catégorie${selectedCalendarDay?.closure_reason ? ` · ${selectedCalendarDay.closure_reason}` : ''}`
+                                      : blocked
+                                        ? `Bloquée${closedPhysicalUnits.get(unit.id) ? ` · ${closedPhysicalUnits.get(unit.id)}` : ''}`
+                                        : 'Disponible'}
+                                </span>
+                                <span className="block text-[10px] text-[#6B6658]">
+                                  {hasUnitSpecialRate ? (
+                                    <>{unitRate ? 'Tarif spécial unité' : 'Tarif spécial catégorie'} · {unitSavings > 0 && <><s>{formatFCFA(activeRoom.price_per_night)}</s> · </>}{formatFCFA(effectiveUnitRate)} / nuit{unitSavings > 0 ? ` · −${unitSavings}%` : ''}</>
+                                  ) : <>Tarif de base · {formatFCFA(effectiveUnitRate)} / nuit</>}
+                                  {unitRate?.reason ? ` · ${unitRate.reason}` : !unitRate && categoryRate !== null && categoryRate !== undefined && selectedCalendarDay?.reason ? ` · ${selectedCalendarDay.reason}` : ''}
+                                </span>
                               </div>
-                              <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${occupant ? 'bg-sky-100 text-sky-800' : blocked ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>{occupant ? 'Réservée' : blocked ? 'Bloquée' : 'Disponible'}</span>
+                              <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${occupant ? 'bg-sky-100 text-sky-800' : unitUnavailable ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>{occupant ? 'Réservée' : categoryClosed ? 'Catégorie fermée' : blocked ? 'Bloquée' : 'Disponible'}</span>
                             </div>
                             {occupant && occupant.status !== 'completed' && (
                               <div className="flex gap-2">
@@ -1870,20 +2021,71 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                                 </button>
                               </div>
                             )}
-                            {!occupant && (
-                              <button
-                                type="button"
-                                disabled={physicalUnitActionId !== null || rangeStart < todayStr}
-                                onClick={() => void handleSetPhysicalRoomStatus(unit, !blocked)}
-                                className="rounded-lg border border-[#D8DED3] bg-white px-3 py-2 text-[10px] font-bold text-[#284C3B] disabled:opacity-50"
-                              >
-                                {physicalUnitActionId === unit.id ? 'Enregistrement…' : blocked ? 'Rendre disponible' : 'Bloquer cette chambre'}
-                              </button>
-                            )}
                           </article>
                         );
                       })}
                     </div>
+                    {calendarScope === 'units' && (
+                      <div className="space-y-2 rounded-xl border border-[#D8DED3] bg-white p-3">
+                        <p className="text-[10px] text-[#6B6658]">
+                          {selectedPhysicalUnitIds.length
+                            ? `${selectedPhysicalUnitIds.length} unité(s) sélectionnée(s) — les dates de début et de fin sont incluses.`
+                            : 'Sélectionnez une ou plusieurs unités actives.'}
+                        </p>
+                        {selectedPhysicalUnitIds.length > 0 && (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              disabled={isSaving || rangeStart < todayStr || selectedPhysicalUnitIds.every((id) => closedPhysicalUnits.has(id))}
+                              onClick={() => void handleSetSelectedUnitsStatus(true)}
+                              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[10px] font-bold text-rose-800 disabled:opacity-50"
+                            >
+                              Fermer les ventes des unités sélectionnées
+                            </button>
+                            {selectedPhysicalUnitIds.some((id) => physicalRangeClosedUnitIds.has(id)) && <button
+                              type="button"
+                              disabled={isSaving || rangeStart < todayStr}
+                              onClick={() => void handleSetSelectedUnitsStatus(false)}
+                              className="rounded-lg border border-[#DCE7DD] bg-[#EFF3ED] px-3 py-2 text-[10px] font-bold text-[#284C3B] disabled:opacity-50"
+                            >
+                              Rouvrir les unités fermées sélectionnées
+                            </button>}
+                          </div>
+                        )}
+                        {selectedPhysicalUnitIds.length > 0 && selectedPhysicalUnitIds.some((id) => physicalRangeRateUnitIds.has(id)) && (
+                          <button
+                            type="button"
+                            disabled={isSaving || rangeStart < todayStr}
+                            onClick={() => void runCalendarAction('remove_price', selectedPhysicalUnitIds)}
+                            className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-900 disabled:opacity-50"
+                          >
+                            Retirer le tarif spécial des unités sélectionnées pour la période
+                          </button>
+                        )}
+                        {selectedPhysicalUnitIds.length > 0 && (
+                          <div className="flex gap-2">
+                            <input
+                              type="number"
+
+                              min={0}
+                              step={1}
+                              value={editPriceOverride}
+                              onChange={(event) => setEditPriceOverride(event.target.value)}
+                              placeholder="Prix spécial par nuit (FCFA)"
+                              className="min-w-0 flex-1 rounded-lg border border-[#D8DED3] px-3 py-2 text-xs"
+                            />
+                            <button
+                              type="button"
+                              disabled={isSaving || rangeStart < todayStr || editPriceOverride.trim() === '' || !Number.isSafeInteger(Number(editPriceOverride)) || Number(editPriceOverride) < 0}
+                              onClick={() => void runCalendarAction('set_price', selectedPhysicalUnitIds, Number(editPriceOverride))}
+                              className="rounded-lg bg-[#284C3B] px-3 py-2 text-[10px] font-bold text-white disabled:opacity-50"
+                            >
+                              Appliquer le tarif
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -1898,13 +2100,13 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
               {/* Quick Actions */}
 
-              {(() => {
+              {calendarScope === 'category' && (() => {
                 const selected = availabilityList.filter(day => day.date >= rangeStart && day.date <= (rangeEnd || rangeStart));
-                const allClosed = selected.length > 0 && selected.every(day => day.sales_closed);
                 const anyClosed = selected.some(day => day.sales_closed);
+                const anyOpen = selected.some(day => !day.sales_closed);
                 const hasPast = rangeStart < todayStr;
                 return <div className="grid grid-cols-1 gap-2">
-                {!hasPast && !anyClosed && <button
+                {!hasPast && anyOpen && <button
 
                   type="button"
 
@@ -1922,7 +2124,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
                 </button>}
 
-                {allClosed && !hasPast && <button
+                {anyClosed && !hasPast && <button
 
                   type="button"
 
@@ -1939,7 +2141,6 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                   <span>Rouvrir les ventes</span>
 
                 </button>}
-                {anyClosed && !allClosed && <p className="text-xs text-amber-700">Période mixte : sélectionnez uniquement des dates fermées pour les rouvrir, ou uniquement des dates ouvertes pour les fermer.</p>}
                 {hasPast && <p className="text-xs text-slate-600">Les dates passées sont consultables uniquement.</p>}
               </div>;
               })()}
@@ -1948,7 +2149,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
               {/* Custom Edit Form */}
 
-              {rangeStart >= todayStr && !availabilityList.some(day => day.date >= rangeStart && day.date <= (rangeEnd || rangeStart) && day.sales_closed) && <form onSubmit={handleSaveCustomChanges} className="space-y-3 pt-3 border-t border-[#E6E2D3] text-xs">
+              {calendarScope === 'category' && rangeStart >= todayStr && <form onSubmit={handleSaveCustomChanges} className="space-y-3 pt-3 border-t border-[#E6E2D3] text-xs">
 
 
 
@@ -1993,7 +2194,9 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
                 <label className="flex items-center gap-2 font-bold text-[#2D2A26] cursor-pointer">
                   <input type="checkbox" checked={changePrice} onChange={e => setChangePrice(e.target.checked)} />
-                  Modifier le tarif spécial
+                  {availabilityList.some(day => day.date >= rangeStart && day.date <= (rangeEnd || rangeStart) && day.price_override !== null)
+                    ? 'Modifier ou retirer le tarif spécial'
+                    : 'Appliquer un tarif spécial'}
                 </label>
                 {/* Price Override */}
 
@@ -2077,7 +2280,11 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
 
                 </div>}
 
-                <p className="text-[10px] text-[#6B6658]">Un tarif vide rétablit le prix de base uniquement si « Modifier le tarif spécial » est coché.</p>
+                <p className="text-[10px] text-[#6B6658]">
+                  {availabilityList.some(day => day.date >= rangeStart && day.date <= (rangeEnd || rangeStart) && day.price_override !== null)
+                    ? 'Un prix vide retire les tarifs spéciaux existants et rétablit le tarif normal.'
+                    : 'Le tarif normal reste applicable tant qu’aucun prix spécial n’est saisi.'}
+                </p>
                 {/* Save Button */}
 
                 <button
@@ -2152,7 +2359,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
             {!dayBookingsLoading && dayBookings.map(booking => (
               <div key={booking.id} className="overflow-hidden rounded-xl border border-[#E6E2D3] text-sm">
                 <button type="button" onClick={() => setExpandedBookingId(current => current === booking.id ? null : booking.id)} aria-expanded={expandedBookingId === booking.id} className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-[#FAF9F6]">
-                  <span className="min-w-0"><span className="block font-bold text-[#2D2A26] truncate">{booking.guest_name}</span><span className="block text-xs text-[#6B6658]">{booking.rooms_count} unité(s) · {booking.booking_source === 'manual' ? 'Manuelle' : booking.booking_source === 'marketplace' ? 'Boly' : booking.booking_source} · {formatFCFA(booking.total_price)}</span></span>
+                  <span className="min-w-0"><span className="block font-bold text-[#2D2A26] truncate">{booking.guest_name}</span><span className="block text-xs text-[#6B6658]">{booking.rooms_count} unité(s) · {booking.booking_source === 'manual' ? 'Manuelle' : booking.booking_source === 'marketplace' ? 'TerangaSN' : booking.booking_source} · {formatFCFA(booking.total_price)}</span></span>
                   <ChevronDown size={17} className={`shrink-0 transition-transform ${expandedBookingId === booking.id ? 'rotate-180' : ''}`}/>
                 </button>
                 {expandedBookingId === booking.id && (
@@ -2162,7 +2369,7 @@ export const RoomAvailabilityCalendar: React.FC<RoomAvailabilityCalendarProps> =
                     <p><strong>Dates :</strong> {formatDate(booking.check_in)} → {formatDate(booking.check_out)} (départ non inclus)</p>
                     <p><strong>Durée :</strong> {booking.nights_count} nuit(s), {booking.rooms_count} unité(s)</p>
                     <p><strong>Montant total convenu :</strong> {formatFCFA(booking.total_price)}</p>
-                    <p><strong>Commission Boly :</strong> {formatFCFA(booking.commission_amount)}</p>
+                    <p><strong>Commission TerangaSN :</strong> {formatFCFA(booking.commission_amount)}</p>
                     <p><strong>Paiement :</strong> {booking.payment_status === 'on_site_paid' ? 'Payé' : 'Non payé / à vérifier'}</p>
                     <p className="text-[#6B6658]">Le montant correspond au séjour complet. L’historique des prix par nuit nécessitera un enregistrement dédié.</p>
                   </div>

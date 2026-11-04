@@ -98,7 +98,7 @@ const PLAN_DETAILS = {
   },
   pro: {
     label: 'Business', price: '39 900 F CFA TTC / mois', commission: '0 %',
-    description: 'Plus de liberté et aucun pourcentage prélevé par Boly sur les réservations marketplace éligibles.',
+    description: 'Plus de liberté et aucun pourcentage prélevé par TerangaSN sur les réservations marketplace éligibles.',
     features: [
       'Tout Standard inclus',
       'Jusqu’à 3 établissements',
@@ -241,7 +241,7 @@ export const HostOnboardingPage: React.FC<HostOnboardingPageProps> = ({
             <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full border border-white/10" aria-hidden="true" />
             <div className="absolute -right-8 -top-12 h-44 w-44 rounded-full border border-white/10" aria-hidden="true" />
             <div className="relative max-w-2xl">
-              <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[#e5cba7]"><Sparkles size={15} /> Boly · Espace professionnel</span>
+              <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[#e5cba7]"><Sparkles size={15} /> TerangaSN · Espace professionnel</span>
               <h1 className="mt-3 font-serif text-3xl font-medium leading-tight tracking-tight sm:text-4xl">{isFirstHost ? 'Votre activité mérite un bel accueil.' : 'Un nouvel établissement, une nouvelle histoire.'}</h1>
               <p className="mt-3 text-sm leading-relaxed text-white/75 sm:text-base">{isFirstHost ? 'Créez votre espace hôte et préparez votre première adresse, à votre rythme.' : 'Préparez votre nouvelle fiche sans la rendre visible aux voyageurs.'}</p>
             </div>
@@ -358,14 +358,14 @@ export const HostOnboardingPage: React.FC<HostOnboardingPageProps> = ({
                         <button key={key} type="button" aria-pressed={selected} onClick={() => updateField('selectedPlan', key)} className={`flex flex-col rounded-2xl border-2 p-5 text-left transition ${selected ? 'border-[#193e30] bg-[#f2f5f0]' : 'border-[#e8e5dc] bg-white hover:border-[#a8bdab]'}`}>
                           <span className="flex w-full items-center justify-between gap-2"><span className="flex items-center gap-2 font-serif text-xl font-bold">{key === 'pro' && <Crown size={21} className="text-[#193e30]" />}{detail.label}</span><span className={`flex h-6 w-6 items-center justify-center rounded-full border ${selected ? 'border-[#193e30] bg-[#193e30] text-white' : 'border-[#e8e5dc]'}`}>{selected && <Check size={14} />}</span></span>
                           <span className="mt-4 text-lg font-bold">{detail.price}</span>
-                          <span className="mt-3 rounded-xl bg-white px-4 py-3 text-2xl font-bold text-[#193e30]">{detail.commission}<span className="mt-1 block text-xs font-normal text-[#68756d]">Commission marketplace Boly</span></span>
+                          <span className="mt-3 rounded-xl bg-white px-4 py-3 text-2xl font-bold text-[#193e30]">{detail.commission}<span className="mt-1 block text-xs font-normal text-[#68756d]">Commission marketplace TerangaSN</span></span>
                           <span className="mt-4 text-sm leading-relaxed text-[#68756d]">{detail.description}</span>
                           <span className="mt-5 space-y-3">{detail.features.map((feature) => <span key={feature} className="flex items-start gap-2 text-sm"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#193e30]" />{feature}</span>)}</span>
                         </button>
                       );
                     })}
                   </div>
-                  <InfoBox>Les réservations réellement directes (WhatsApp, téléphone, accueil ou lien direct de l’établissement) sont sans commission Boly. Seules les réservations éligibles apportées par la marketplace sont commissionnées en Standard.</InfoBox>
+                  <InfoBox>Les réservations réellement directes (WhatsApp, téléphone, accueil ou lien direct de l’établissement) sont sans commission TerangaSN. Seules les réservations éligibles apportées par la marketplace sont commissionnées en Standard.</InfoBox>
                   <div className="rounded-2xl border border-[#e8e5dc] bg-[#f8f7f3] p-5">
                     <div className="flex items-start gap-3"><Wallet size={21} className="mt-0.5 shrink-0 text-[#193e30]" /><div><p className="font-bold">Aucun paiement maintenant</p><p className="mt-2 text-sm leading-relaxed text-[#68756d]">Vous exprimez une préférence de formule. Le paiement, l’activation effective de Business et la facturation seront configurés ultérieurement. Les tarifs sont TTC et restent à valider avant commercialisation.</p></div></div>
                   </div>

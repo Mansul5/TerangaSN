@@ -53,7 +53,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectRegion, onNavigate }) =>
 
         <div className="grid grid-cols-1 gap-x-8 gap-y-10 border-b border-[#E6E0D6] py-12 min-[380px]:grid-cols-2 lg:grid-cols-[1.45fr_1fr_1fr_1fr] lg:gap-10">
           <div className="min-w-0 min-[380px]:col-span-2 lg:col-span-1">
-            <div className="font-serif text-[34px] font-bold leading-none tracking-[-0.055em] text-[#193E30]">Boly<span className="text-[#C7AC85]">.</span></div>
+            <div className="font-serif text-[30px] font-bold leading-none tracking-[-0.055em] text-[#193E30]">TerangaSN</div>
             <p className="mt-5 max-w-sm text-sm leading-7 text-[#667268]">
               Découvrez le Sénégal à votre rythme. Des séjours soigneusement présentés, une recherche simple et une expérience pensée pour vous.
             </p>
@@ -116,7 +116,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectRegion, onNavigate }) =>
         </div>
 
         <div className="flex flex-col items-start justify-between gap-4 pt-6 text-xs text-[#77847A] sm:flex-row sm:items-center">
-          <p>© {currentYear} Boly. Tous droits réservés.</p>
+          <p>© {currentYear} TerangaSN. Tous droits réservés.</p>
           <nav aria-label="Informations juridiques" className="flex flex-wrap gap-x-4 gap-y-2">
             <button type="button" onClick={() => onNavigate('terms')} className="underline-offset-4 hover:text-[#193E30] hover:underline">Conditions d’utilisation</button>
             <button type="button" onClick={() => onNavigate('host-terms-public')} className="underline-offset-4 hover:text-[#193E30] hover:underline">Conditions pour les hôtes</button>

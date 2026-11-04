@@ -1,5 +1,5 @@
 {
-  "name": "Teranga Booking Sénégal",
+  "name": "TerangaSN",
   "description": "Plateforme de réservation d'hôtels, lodges et campements au Sénégal dans le style de Booking.com",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

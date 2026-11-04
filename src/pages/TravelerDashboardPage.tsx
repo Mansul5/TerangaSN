@@ -1752,7 +1752,7 @@ export function TravelerDashboardPage({
 
                       />
 
-                      Connecté à Boly
+                      Connecté à TerangaSN
 
                     </div>
 

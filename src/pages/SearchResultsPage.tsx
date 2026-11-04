@@ -61,6 +61,9 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFil
   const [maxBeachDistance, setMaxBeachDistance] = useState(initialFilters.maxBeachDistance || 0);
   const [sortBy, setSortBy] = useState<SortOrder>(initialFilters.sortBy || 'recommended');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  const filterCloseRef = useRef<HTMLButtonElement>(null);
+  const filterDialogRef = useRef<HTMLDivElement>(null);
   const [hotels, setHotels] = useState<Lodging[]>([]);
   const [reviewStats, setReviewStats] = useState<Record<string, ReviewSummary>>({});
   const [loading, setLoading] = useState(true);
@@ -70,6 +73,41 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFil
   const [refreshIndex, setRefreshIndex] = useState(0);
   const requestId = useRef(0);
   const reviewRequestId = useRef(0);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusFrame = window.requestAnimationFrame(() => filterCloseRef.current?.focus({ preventScroll: true }));
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setFiltersOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !filterDialogRef.current) return;
+      const elements = Array.from(filterDialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter(element => element.getClientRects().length > 0);
+      if (!elements.length) return;
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      window.requestAnimationFrame(() => filterTriggerRef.current?.focus({ preventScroll: true }));
+    };
+  }, [filtersOpen]);
 
   const toggleAmenity = useCallback((id: string) => {
     setAmenities((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -201,7 +239,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFil
           <div className="absolute right-20 -bottom-48 h-96 w-96 rounded-full border border-white/10" />
         </div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-10 pb-12 sm:pt-14 sm:pb-16">
-          <div className="flex items-center gap-2 text-[#D7C8A9] text-xs font-semibold tracking-[0.18em] uppercase mb-3"><Compass size={15} /> BOLY · COLLECTION DE SÉJOURS</div>
+          <div className="flex items-center gap-2 text-[#D7C8A9] text-xs font-semibold tracking-[0.18em] uppercase mb-3"><Compass size={15} /> TERANGASN · COLLECTION DE SÉJOURS</div>
           <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-semibold leading-tight max-w-3xl">Votre prochain séjour <span className="italic text-[#D7C8A9]">commence ici.</span></h1>
           <p className="mt-3 mb-7 text-sm sm:text-base text-white/75 max-w-xl">Des adresses à découvrir, des séjours à votre rythme, des prix en francs CFA.</p>
           <div className="rounded-[26px] bg-white/10 border border-white/20 p-2 sm:p-3 backdrop-blur-md shadow-[0_24px_70px_rgba(0,0,0,0.14)]"><SearchBar variant="compact" initialDestination={destination} initialCheckIn={checkIn} initialCheckOut={checkOut} initialAdults={adults} initialChildren={children} initialRooms={rooms} onSearch={(params) => { setDestination(params.destination); setCheckIn(params.checkIn); setCheckOut(params.checkOut); setAdults(params.adults); setChildren(params.children); setRooms(params.rooms); }} /></div>
@@ -219,9 +257,9 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFil
           </div>
         )}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-6">
-          <div><div className="flex items-center gap-2 text-[#8C7652] text-xs uppercase tracking-[0.17em] font-bold mb-2"><Sparkles size={14} /> La sélection Boly</div><h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#1B382D]">{destination ? `Séjours à ${destination}` : 'Des lieux à découvrir'}</h2><p className="mt-2 text-sm text-[#777A70]">{loading ? 'Recherche en cours…' : `${minRating > 0 && !reviewsLoading ? visibleHotels.length : totalCount} hébergement${(minRating > 0 && !reviewsLoading ? visibleHotels.length : totalCount) > 1 ? 's' : ''} trouvé${(minRating > 0 && !reviewsLoading ? visibleHotels.length : totalCount) > 1 ? 's' : ''}`} · Tarifs en FCFA</p></div>
+          <div><div className="flex items-center gap-2 text-[#8C7652] text-xs uppercase tracking-[0.17em] font-bold mb-2"><Sparkles size={14} /> La sélection TerangaSN</div><h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#1B382D]">{destination ? `Séjours à ${destination}` : 'Des lieux à découvrir'}</h2><p className="mt-2 text-sm text-[#777A70]">{loading ? 'Recherche en cours…' : `${minRating > 0 && !reviewsLoading ? visibleHotels.length : totalCount} hébergement${(minRating > 0 && !reviewsLoading ? visibleHotels.length : totalCount) > 1 ? 's' : ''} trouvé${(minRating > 0 && !reviewsLoading ? visibleHotels.length : totalCount) > 1 ? 's' : ''}`} · Tarifs en FCFA</p></div>
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => setFiltersOpen(true)} className="lg:hidden inline-flex items-center gap-2 bg-white border border-[#E9E2D5] rounded-xl px-4 py-3 text-sm font-semibold text-[#1B382D]"><Filter size={16} /> Filtres {activeFilterCount > 0 && <span className="bg-[#284C3B] text-white rounded-full px-2 py-0.5 text-xs">{activeFilterCount}</span>}</button>
+            <button ref={filterTriggerRef} type="button" onClick={() => setFiltersOpen(true)} className="lg:hidden inline-flex items-center gap-2 bg-white border border-[#E9E2D5] rounded-xl px-4 py-3 text-sm font-semibold text-[#1B382D]"><Filter size={16} /> Filtres {activeFilterCount > 0 && <span className="bg-[#284C3B] text-white rounded-full px-2 py-0.5 text-xs">{activeFilterCount}</span>}</button>
             <label className="inline-flex items-center gap-2 bg-white border border-[#E9E2D5] rounded-xl px-3 py-3 text-sm text-[#545A50]"><ArrowDownUp size={16} /><span className="sr-only">Trier les résultats</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOrder)} className="bg-transparent outline-none font-semibold text-[#1B382D] max-w-[180px] cursor-pointer"><option value="recommended">Recommandés</option><option value="price_asc">Prix croissant</option><option value="price_desc">Prix décroissant</option><option value="rating_desc">Mieux notés</option></select><ChevronDown size={13} className="hidden sm:block" /></label>
           </div>
         </div>
@@ -237,7 +275,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({ initialFil
         </div>
       </div>
 
-      {filtersOpen && <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Filtres de recherche"><button type="button" aria-label="Fermer les filtres" onClick={() => setFiltersOpen(false)} className="absolute inset-0 bg-[#1B382D]/65" /><div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-[#F7F5EF] flex flex-col shadow-2xl"><div className="px-5 py-4 flex items-center justify-between border-b border-[#E9E2D5]"><div className="font-serif text-lg font-bold text-[#1B382D]">Personnaliser ma recherche</div><button type="button" aria-label="Fermer" onClick={() => setFiltersOpen(false)} className="p-2 rounded-full bg-white text-[#1B382D]"><X size={20} /></button></div><div className="overflow-y-auto flex-1 p-5">{filterPanel(true)}</div><div className="p-4 bg-white border-t border-[#E9E2D5]"><button type="button" onClick={() => setFiltersOpen(false)} className="w-full bg-[#284C3B] text-white rounded-xl py-3.5 font-bold text-sm flex items-center justify-center gap-2">Voir les résultats <ArrowRight size={16} /></button></div></div></div>}
+      {filtersOpen && <div ref={filterDialogRef} className="fixed inset-0 z-[110] lg:hidden" role="dialog" aria-modal="true" aria-label="Filtres de recherche"><button tabIndex={-1} type="button" aria-label="Fermer les filtres" onClick={() => setFiltersOpen(false)} className="absolute inset-0 bg-[#1B382D]/65" /><div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-[#F7F5EF] pb-[env(safe-area-inset-bottom)] shadow-2xl"><div className="flex items-center justify-between border-b border-[#E9E2D5] px-5 py-4"><h2 className="font-serif text-lg font-bold text-[#1B382D]">Personnaliser ma recherche</h2><button ref={filterCloseRef} type="button" aria-label="Fermer" onClick={() => setFiltersOpen(false)} className="rounded-full bg-white p-2 text-[#1B382D]"><X size={20} /></button></div><div className="flex-1 overflow-y-auto overscroll-contain p-5">{filterPanel(true)}</div><div className="border-t border-[#E9E2D5] bg-white p-4"><button type="button" onClick={() => setFiltersOpen(false)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#284C3B] py-3.5 text-sm font-bold text-white">Voir les résultats <ArrowRight size={16} /></button></div></div></div>}
     </div>
   );
 };

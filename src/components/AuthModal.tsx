@@ -37,6 +37,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const headingId = useId();
   const emailRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const activeRequestRef = useRef(0);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
@@ -72,12 +73,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(false);
     setErrorMsg('');
     setSuccessMsg('');
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const focusId = window.setTimeout(() => emailRef.current?.focus(), 0);
+    const focusId = window.setTimeout(() => emailRef.current?.focus({ preventScroll: true }), 0);
     return () => {
       window.clearTimeout(focusId);
       document.body.style.overflow = previousOverflow;
+      const returnFocus = returnFocusRef.current;
+      window.requestAnimationFrame(() => returnFocus?.focus({ preventScroll: true }));
       activeRequestRef.current += 1;
     };
   }, [isOpen, initialMode]);

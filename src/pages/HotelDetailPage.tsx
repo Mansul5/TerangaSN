@@ -243,10 +243,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
       {
 
         totalPrice: number;
-
+        baseTotalPrice: number;
         averageNightlyPrice: number;
-
         hasSpecialRates: boolean;
+        hasCategoryWideSpecialRate: boolean;
+        hasUnitSpecificRates: boolean;
 
         isAvailable: boolean;
 
@@ -313,10 +314,11 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
           {
 
             totalPrice: number;
-
+            baseTotalPrice: number;
             averageNightlyPrice: number;
-
             hasSpecialRates: boolean;
+            hasCategoryWideSpecialRate: boolean;
+            hasUnitSpecificRates: boolean;
 
             isAvailable: boolean;
 
@@ -371,14 +373,17 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
             results[room.id] = {
 
               totalPrice: pricing.totalPrice,
-
+              baseTotalPrice: pricing.baseTotalPrice,
               averageNightlyPrice:
 
                 pricing.averageNightlyPrice,
 
               hasSpecialRates:
-
                 pricing.hasSpecialRates,
+              hasCategoryWideSpecialRate:
+                pricing.hasCategoryWideSpecialRate,
+              hasUnitSpecificRates:
+                pricing.hasUnitSpecificRates,
 
               isAvailable: isAvail,
 
@@ -393,11 +398,12 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
             results[room.id] = {
 
               totalPrice:
-
                 room.price_per_night *
-
                 nightsCount *
-
+                roomsCount,
+              baseTotalPrice:
+                room.price_per_night *
+                nightsCount *
                 roomsCount,
 
               averageNightlyPrice:
@@ -405,6 +411,8 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                 room.price_per_night,
 
               hasSpecialRates: false,
+              hasCategoryWideSpecialRate: false,
+              hasUnitSpecificRates: false,
 
               isAvailable: false,
 
@@ -571,14 +579,6 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
     };
 
     loadHotelDetails();
-
-    window.scrollTo({
-
-      top: 0,
-
-      behavior: 'smooth',
-
-    });
 
     return () => {
 
@@ -868,7 +868,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
     const totalPrice =
 
-      pricing.totalPrice ||
+      pricing.totalPrice ??
 
       selectedRoom.price_per_night *
 
@@ -1034,7 +1034,7 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
 
   const selectedRoomTotal =
 
-    selectedRoomPricing?.totalPrice ||
+    selectedRoomPricing?.totalPrice ??
 
     (selectedRoom
 
@@ -2111,25 +2111,24 @@ export const HotelDetailPage: React.FC<HotelDetailPageProps> = ({
                   <p className="text-xs text-[#9B7B4C] font-semibold">
 
                     {formatFCFA(
-
-                      selectedRoomPricing?.averageNightlyPrice ||
-
-                        selectedRoom.price_per_night
-
+                      selectedRoomPricing?.hasUnitSpecificRates
+                        && !selectedRoomPricing.hasCategoryWideSpecialRate
+                        ? selectedRoom.price_per_night
+                        : selectedRoomPricing?.averageNightlyPrice
+                          ?? selectedRoom.price_per_night
                     )}{' '}
 
                     / nuit
 
                   </p>
 
-                  {selectedRoomPricing?.hasSpecialRates && (
-
+                  {selectedRoomPricing?.hasCategoryWideSpecialRate && (
                     <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded">
-
                       Tarif saisonnier appliqué
-
                     </span>
-
+                  )}
+                  {!selectedRoomPricing?.hasCategoryWideSpecialRate && selectedRoomPricing?.hasUnitSpecificRates && (
+                    <span className="block text-[10px] text-[#74786F]">Tarif calculé selon les unités attribuées</span>
                   )}
 
                   {selectedRoomPricing?.isAvailable ===

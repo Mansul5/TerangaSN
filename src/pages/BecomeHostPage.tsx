@@ -58,7 +58,7 @@ const comparison: ComparisonGroup[] = [
 
     { name: 'Réservations saisies manuellement', standard: '0 %', business: '0 %', enterprise: '0 %' },
 
-    { name: 'Visibilité sur la marketplace Boly', standard: true, business: true, enterprise: 'Selon contrat' },
+    { name: 'Visibilité sur la marketplace TerangaSN', standard: true, business: true, enterprise: 'Selon contrat' },
 
   ] },
 
@@ -120,21 +120,21 @@ const comparison: ComparisonGroup[] = [
 
 const faq = [
 
-  ['Puis-je commencer gratuitement ?', 'Oui. Standard ne comporte aucun abonnement mensuel. Une commission de 12 % TTC est prévue uniquement sur les réservations marketplace éligibles apportées par Boly.'],
+  ['Puis-je commencer gratuitement ?', 'Oui. Standard ne comporte aucun abonnement mensuel. Une commission de 12 % TTC est prévue uniquement sur les réservations marketplace éligibles apportées par TerangaSN.'],
 
-  ['Dois-je utiliser Boly pour utiliser Manager ?', 'Non. Manager est pensé comme un logiciel de gestion autonome : vous pouvez saisir vos réservations reçues par téléphone, WhatsApp, à la réception ou depuis d’autres plateformes.'],
+  ['Dois-je utiliser TerangaSN pour utiliser Manager ?', 'Non. Manager est pensé comme un logiciel de gestion autonome : vous pouvez saisir vos réservations reçues par téléphone, WhatsApp, à la réception ou depuis d’autres plateformes.'],
 
-  ['Pourquoi 0 % via mon lien si la réservation se fait sur Boly ?', 'Le logiciel qui enregistre la réservation et le canal qui a amené le client sont deux choses différentes. Une réservation attribuée à votre lien personnel peut être traitée sur Boly sans commission : c’est vous qui avez apporté le client. En Standard, les 12 % TTC concernent uniquement les réservations éligibles apportées par la recherche publique Boly. Les règles d’attribution et de prévention des abus seront précisées avant le lancement.'],
+  ['Pourquoi 0 % via mon lien si la réservation se fait sur TerangaSN ?', 'Le logiciel qui enregistre la réservation et le canal qui a amené le client sont deux choses différentes. Une réservation attribuée à votre lien personnel peut être traitée sur TerangaSN sans commission : c’est vous qui avez apporté le client. En Standard, les 12 % TTC concernent uniquement les réservations éligibles apportées par la recherche publique TerangaSN. Les règles d’attribution et de prévention des abus seront précisées avant le lancement.'],
 
   ['Que comprend la gestion du ménage ?', 'Standard prévoit le statut des chambres (à nettoyer, en cours, prête) et une liste de tâches. Business ajoute l’attribution aux employés, les priorités et le suivi. Enterprise prévoit la coordination de plusieurs sites. Ces modules seront déployés progressivement.'],
 
   ['Que signifie automatisations ?', 'Ce sont des opérations déclenchées par le logiciel : calcul des nuitées et indicateurs en Standard, tâches de ménage et rappels internes en Business, règles et rapports sur mesure en Enterprise. Cela ne promet ni intelligence artificielle, ni messages WhatsApp automatiques, ni synchronisation Booking.com/Airbnb.'],
 
-  ['Quelle différence entre les vitrines Standard et Business ?', 'Standard permet de renseigner les photos, chambres, prix, équipements et coordonnées dans une présentation fixe. Business prévoit davantage de choix de couleurs, galeries et sections. Dans les deux cas, les réservations directes attribuées au lien restent à 0 % de commission Boly.'],
+  ['Quelle différence entre les vitrines Standard et Business ?', 'Standard permet de renseigner les photos, chambres, prix, équipements et coordonnées dans une présentation fixe. Business prévoit davantage de choix de couleurs, galeries et sections. Dans les deux cas, les réservations directes attribuées au lien restent à 0 % de commission TerangaSN.'],
 
   ['Quelles promotions puis-je créer ?', 'Standard prévoit des réductions simples sur une période. Business prévoit des codes promotionnels, des offres pour longs séjours et des campagnes programmées. Enterprise pourra coordonner les offres de plusieurs établissements. Ces possibilités seront livrées progressivement.'],
 
-  ['Pourquoi choisir Business ?', 'Business supprime la commission marketplace Boly et ajoute notamment la gestion de trois établissements, cinq collaborateurs, des permissions, des statistiques avancées et une vitrine plus personnalisable.'],
+  ['Pourquoi choisir Business ?', 'Business supprime la commission marketplace TerangaSN et ajoute notamment la gestion de trois établissements, cinq collaborateurs, des permissions, des statistiques avancées et une vitrine plus personnalisable.'],
 
   ['Quand Business devient-il financièrement intéressant ?', 'Avec les tarifs envisagés, le point d’équilibre est atteint à 332 500 F CFA de réservations marketplace éligibles par mois. Les réservations directes sont exclues de ce calcul. Le seuil dépend uniquement des réservations marketplace éligibles.'],
 
@@ -211,7 +211,7 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
       <div className="border-b border-[#e8e5dc] bg-white/95">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-3 sm:px-8">
-          <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#193e30] font-serif text-xl font-semibold text-white">B</span><div><p className="text-sm font-bold tracking-tight text-[#193e30]">Boly</p><p className="text-[10px] text-[#68756d]">Solutions pour les hébergeurs</p></div></div>
+          <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#193e30] font-serif text-xs font-bold text-white">TSN</span><div><p className="text-sm font-bold tracking-tight text-[#193e30]">TerangaSN</p><p className="text-[10px] text-[#68756d]">Solutions pour les hébergeurs</p></div></div>
           <nav aria-label="Navigation de la présentation hôte" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold text-[#193e30]">
             <a href="#manager-features" className="hover:underline">Fonctionnalités</a>
             <a href="#host-pricing" className="hover:underline">Formules</a>
@@ -270,7 +270,7 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
                 <div className="flex items-center justify-between border-b border-[#e8e5dc] pb-3">
 
-                  <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#193e30] text-white"><LayoutDashboard size={18}/></span><div><p className="text-[9px] font-bold uppercase tracking-wider text-[#68756d]">Boly PMS</p><h3 className="text-sm font-semibold">Vue d'ensemble</h3></div></div>
+                  <div className="flex items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#193e30] text-white"><LayoutDashboard size={18}/></span><div><p className="text-[9px] font-bold uppercase tracking-wider text-[#68756d]">TerangaSN Manager</p><h3 className="text-sm font-semibold">Vue d'ensemble</h3></div></div>
 
                   <span className="rounded-full bg-[#f2f5f0] px-2 py-1 text-[9px] font-semibold text-[#193e30]">Démonstration</span>
 
@@ -336,7 +336,7 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
       <section className="bg-white py-20 lg:py-24"><div className="mx-auto grid max-w-7xl gap-12 px-5 sm:px-8 lg:grid-cols-2 lg:items-center lg:gap-20">
 
-        <div><Heading eyebrow="Un logiciel indépendant" title="Votre activité ne se limite pas à une plateforme de réservation." description="Boly PMS vous accompagne même quand vos clients réservent ailleurs. Vous conservez la maîtrise de votre organisation et de vos informations." />
+        <div><Heading eyebrow="Un logiciel indépendant" title="Votre activité ne se limite pas à une plateforme de réservation." description="TerangaSN Manager vous accompagne même quand vos clients réservent ailleurs. Vous conservez la maîtrise de votre organisation et de vos informations." />
 
           <div className="mt-8 space-y-5">{[
 
@@ -384,7 +384,7 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
           ].map((line) => <p key={line} className="flex items-start gap-3 text-sm leading-6"><CheckCircle2 size={19} className="mt-0.5 shrink-0 text-[#193e30]" />{line}</p>)}</div>
 
-          <p className="mt-6 text-xs leading-6 text-[#68756d]">La vitrine et ses possibilités de personnalisation seront déployées progressivement. La réservation peut se faire sur Boly : c’est l’origine du client qui détermine la commission. Les règles d’attribution seront précisées dans les conditions commerciales.</p>
+          <p className="mt-6 text-xs leading-6 text-[#68756d]">La vitrine et ses possibilités de personnalisation seront déployées progressivement. La réservation peut se faire sur TerangaSN : c’est l’origine du client qui détermine la commission. Les règles d’attribution seront précisées dans les conditions commerciales.</p>
 
         </div>
 
@@ -394,7 +394,7 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
             <Globe2 size={16} className="shrink-0 text-[#193e30]" />
 
-            <span className="min-w-0 flex-1 truncate">boly · exemple de vitrine / les-palmiers</span>
+            <span className="min-w-0 flex-1 truncate">TerangaSN · exemple de vitrine / les-palmiers</span>
 
             <span className="rounded-full bg-[#f2f5f0] px-2.5 py-1 text-[10px] font-semibold text-[#193e30]">Aperçu</span>
 
@@ -532,7 +532,7 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
               <p className="mt-6 text-4xl font-semibold text-[#193e30]">39 900 F <span className="text-xs font-normal text-[#68756d]">CFA TTC / mois</span></p>
 
-              <div className="mt-5 rounded-xl border border-[#dfe7dd] bg-white p-4"><p className="text-2xl font-semibold text-[#193e30]">0 %</p><p className="mt-1 text-xs text-[#68756d]">Commission Boly sur les réservations marketplace</p></div>
+              <div className="mt-5 rounded-xl border border-[#dfe7dd] bg-white p-4"><p className="text-2xl font-semibold text-[#193e30]">0 %</p><p className="mt-1 text-xs text-[#68756d]">Commission TerangaSN sur les réservations marketplace</p></div>
 
               <ul className="mt-6 flex-1 space-y-3">{['Tout Standard inclus','Jusqu’à 3 établissements et 5 collaborateurs','Rôles et permissions','Statistiques, ménage et promotions avancés','Vitrine personnalisable et assistance prioritaire'].map(item => <li key={item} className="flex gap-2 text-sm leading-6"><Check size={17} className="mt-1 shrink-0 text-[#193e30]"/>{item}</li>)}</ul>
 
@@ -571,13 +571,13 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
       <section className="bg-white py-20 lg:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><Heading eyebrow="Comparaison détaillée" title="Des différences claires, au-delà du prix." description="Comparez les conditions financières, les opérations quotidiennes, le travail en équipe et les possibilités de croissance." center />
 
-        <div className="mt-10 overflow-x-auto rounded-[20px] border border-[#e8e5dc]"><table className="w-full min-w-[760px] border-collapse text-left text-[13px]"><thead><tr className="bg-[#f8f7f3]"><th className="w-[34%] px-5 py-5 font-semibold">Fonctionnalité</th><th className="w-[22%] px-4 py-5 font-semibold">Standard</th><th className="w-[22%] bg-[#f2f5f0] px-4 py-5 font-semibold text-[#193e30]">Business</th><th className="w-[22%] px-4 py-5 font-semibold">Enterprise</th></tr></thead><tbody>{comparison.map((group) => <React.Fragment key={group.title}><tr><th colSpan={4} className="bg-[#e8e5dc]/55 px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-[#193e30]">{group.title}</th></tr>{group.rows.map((r, i) => <tr key={r.name} className={`border-t border-[#e8e5dc] ${i % 2 ? 'bg-[#faf9f6]' : 'bg-white'}`}><th className="px-5 py-4 font-medium">{r.name}</th><td className="px-4 py-4 text-[#68756d]"><Feature value={r.standard}/></td><td className="bg-[#f2f5f0]/60 px-4 py-4 font-semibold text-[#193e30]"><Feature value={r.business}/></td><td className="px-4 py-4 text-[#68756d]"><Feature value={r.enterprise}/></td></tr>)}</React.Fragment>)}</tbody></table></div><p className="mt-4 text-xs leading-6 text-[#68756d]">* Le taux direct de 0 % suppose une attribution vérifiée au lien de l’établissement, même si la réservation est finalisée sur Boly. Les limites Business affichées sont de 3 établissements et 5 collaborateurs ; les fonctionnalités avancées sont déployées progressivement. La mention « inclus » décrit le périmètre envisagé, pas une garantie de disponibilité immédiate. Les quotas d’établissements sont contrôlés côté serveur. Les fonctionnalités annoncées comme futures seront déployées progressivement.</p>
+        <div className="mt-10 overflow-x-auto rounded-[20px] border border-[#e8e5dc]"><table className="w-full min-w-[760px] border-collapse text-left text-[13px]"><thead><tr className="bg-[#f8f7f3]"><th className="w-[34%] px-5 py-5 font-semibold">Fonctionnalité</th><th className="w-[22%] px-4 py-5 font-semibold">Standard</th><th className="w-[22%] bg-[#f2f5f0] px-4 py-5 font-semibold text-[#193e30]">Business</th><th className="w-[22%] px-4 py-5 font-semibold">Enterprise</th></tr></thead><tbody>{comparison.map((group) => <React.Fragment key={group.title}><tr><th colSpan={4} className="bg-[#e8e5dc]/55 px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-[#193e30]">{group.title}</th></tr>{group.rows.map((r, i) => <tr key={r.name} className={`border-t border-[#e8e5dc] ${i % 2 ? 'bg-[#faf9f6]' : 'bg-white'}`}><th className="px-5 py-4 font-medium">{r.name}</th><td className="px-4 py-4 text-[#68756d]"><Feature value={r.standard}/></td><td className="bg-[#f2f5f0]/60 px-4 py-4 font-semibold text-[#193e30]"><Feature value={r.business}/></td><td className="px-4 py-4 text-[#68756d]"><Feature value={r.enterprise}/></td></tr>)}</React.Fragment>)}</tbody></table></div><p className="mt-4 text-xs leading-6 text-[#68756d]">* Le taux direct de 0 % suppose une attribution vérifiée au lien de l’établissement, même si la réservation est finalisée sur TerangaSN. Les limites Business affichées sont de 3 établissements et 5 collaborateurs ; les fonctionnalités avancées sont déployées progressivement. La mention « inclus » décrit le périmètre envisagé, pas une garantie de disponibilité immédiate. Les quotas d’établissements sont contrôlés côté serveur. Les fonctionnalités annoncées comme futures seront déployées progressivement.</p>
 
       </div></section>
 
 
 
-      <section className="bg-[#f8f7f3] py-20 lg:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><Heading eyebrow="Simulateur de coûts TTC" title="À quel moment Business devient-il avantageux ?" description="Comparez les coûts à partir du montant mensuel des réservations éligibles apportées par Boly. Les réservations directes ne sont pas prises en compte." center />
+      <section className="bg-[#f8f7f3] py-20 lg:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><Heading eyebrow="Simulateur de coûts TTC" title="À quel moment Business devient-il avantageux ?" description="Comparez les coûts à partir du montant mensuel des réservations éligibles apportées par TerangaSN. Les réservations directes ne sont pas prises en compte." center />
 
         <div className="mx-auto mt-10 max-w-4xl rounded-[24px] border border-[#e8e5dc] bg-white p-6 sm:p-9"><label htmlFor="host-booking-volume" className="text-sm font-semibold">Volume mensuel de réservations marketplace</label><p className="mt-3 font-serif text-3xl font-semibold text-[#193e30] sm:text-4xl">{money(bookingVolume)}</p><div className="mt-5 flex flex-wrap gap-2" aria-label="Exemples de volumes mensuels">
               {[150000, 332500, 500000, 1000000].map((volume) => <button key={volume} type="button" onClick={() => setBookingVolume(volume)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${bookingVolume === volume ? 'border-[#193e30] bg-[#193e30] text-white' : 'border-[#e8e5dc] bg-white text-[#193e30] hover:bg-[#f2f5f0]'}`}>{money(volume)}</button>)}
@@ -593,7 +593,7 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
       <section className="border-y border-[#e8e5dc] bg-[#f8f7f3] py-20 lg:py-24"><div className="mx-auto max-w-7xl px-5 sm:px-8"><Heading eyebrow="Votre parcours" title="Démarrer simplement, évoluer à votre rythme." description="Un parcours guidé pour créer votre espace, renseigner votre activité et préparer votre établissement." center /><div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[
 
-        {icon: KeyRound, n:'01', title:'Votre compte', detail:'Connectez-vous ou créez votre compte Boly.'},
+        {icon: KeyRound, n:'01', title:'Votre compte', detail:'Connectez-vous ou créez votre compte TerangaSN.'},
 
         {icon: BriefcaseBusiness, n:'02', title:'Votre rôle', detail:'Indiquez votre statut de propriétaire, gérant ou représentant.'},
 
@@ -609,7 +609,7 @@ export const BecomeHostPage: React.FC<BecomeHostPageProps> = ({ isAuthenticated,
 
 
 
-      <section className="bg-[#193e30] py-16 text-white lg:py-20"><div className="mx-auto max-w-4xl px-5 text-center sm:px-8"><span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#e5cba7]">Boly PMS</span><h2 className="mt-4 font-serif text-3xl font-medium leading-tight sm:text-5xl">Consacrez moins de temps à l'organisation.<br/>Plus de temps à l'accueil.</h2><p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-white/70">Créez votre espace, préparez votre établissement et gérez vos opérations depuis Boly.</p><div className="mt-8 flex flex-wrap justify-center gap-3"><button type="button" onClick={onStart} className="inline-flex items-center gap-2 rounded-xl bg-[#f8f7f3] px-7 py-3.5 text-sm font-semibold text-[#193e30] hover:bg-white">{isAuthenticated ? 'Continuer vers mon espace hôte' : 'Créer mon espace hôte'} <ArrowRight size={17}/></button>{!isAuthenticated && <button type="button" onClick={onSignIn} className="rounded-xl border border-white/30 px-7 py-3.5 text-sm font-semibold hover:bg-white/10">J'ai déjà un compte</button>}</div></div></section>
+      <section className="bg-[#193e30] py-16 text-white lg:py-20"><div className="mx-auto max-w-4xl px-5 text-center sm:px-8"><span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#e5cba7]">TerangaSN Manager</span><h2 className="mt-4 font-serif text-3xl font-medium leading-tight sm:text-5xl">Consacrez moins de temps à l'organisation.<br/>Plus de temps à l'accueil.</h2><p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-white/70">Créez votre espace, préparez votre établissement et gérez vos opérations depuis TerangaSN.</p><div className="mt-8 flex flex-wrap justify-center gap-3"><button type="button" onClick={onStart} className="inline-flex items-center gap-2 rounded-xl bg-[#f8f7f3] px-7 py-3.5 text-sm font-semibold text-[#193e30] hover:bg-white">{isAuthenticated ? 'Continuer vers mon espace hôte' : 'Créer mon espace hôte'} <ArrowRight size={17}/></button>{!isAuthenticated && <button type="button" onClick={onSignIn} className="rounded-xl border border-white/30 px-7 py-3.5 text-sm font-semibold hover:bg-white/10">J'ai déjà un compte</button>}</div></div></section>
 
     </div>
 

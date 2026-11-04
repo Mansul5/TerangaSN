@@ -4,7 +4,7 @@ const sections = [
   {
     title: '1. Objet',
     paragraphs: [
-      'La plateforme Teranga Booking Sénégal permet de rechercher, comparer et réserver des hébergements au Sénégal. Elle met en relation des voyageurs et des hôteliers, propriétaires ou gestionnaires d’établissements.',
+      'La plateforme TerangaSN permet de rechercher, comparer et réserver des hébergements au Sénégal. Elle met en relation des voyageurs et des hôteliers, propriétaires ou gestionnaires d’établissements.',
     ],
   },
   {

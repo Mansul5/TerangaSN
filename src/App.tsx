@@ -26,6 +26,9 @@ import { supabase } from '@/src/lib/supabase/client';
 
 const VIEW_KEY = 'terangasn.currentView.v1';
 const DASHBOARD_TAB_KEY = 'terangasn.travelerTab.v1';
+const SEARCH_FILTERS_KEY = 'terangasn.searchFilters.v1';
+const SELECTED_HOTEL_KEY = 'terangasn.selectedHotel.v1';
+const VIEW_SCROLL_KEY = 'terangasn.viewScrollPositions.v1';
 const RESTORABLE_VIEWS = new Set(['home', 'search', 'hotel-detail', 'traveler-dashboard', 'become-host', 'terms', 'privacy-policy', 'host-terms', 'host-terms-public', 'host-onboarding', 'hotelier-dashboard', 'admin-dashboard']);
 const readSavedView = (): string => {
   try {
@@ -55,9 +58,22 @@ const DEFAULT_FILTERS: Partial<SearchFilters> = {
 function MainApp() {
   const { user, role, hasHostAccess, hasAdminStaffAccess, isLoading, refreshProfile } = useAuth();
   const [currentView, setCurrentView] = useState<string>(readSavedView);
-  const viewScrollPositions = useRef(new Map<string, number>());
-  const [selectedHotelId, setSelectedHotelId] = useState<string | null>(null);
-  const [searchFilters, setSearchFilters] = useState<Partial<SearchFilters>>({ ...DEFAULT_FILTERS });
+  const viewScrollPositions = useRef<Map<string, number>>((() => {
+    try {
+      const saved = window.sessionStorage.getItem(VIEW_SCROLL_KEY);
+      const parsed = saved ? JSON.parse(saved) as Record<string, number> : {};
+      return new Map(Object.entries(parsed).filter((entry): entry is [string, number] => Number.isFinite(entry[1])));
+    } catch { return new Map(); }
+  })());
+  const [selectedHotelId, setSelectedHotelId] = useState<string | null>(() => {
+    try { return window.sessionStorage.getItem(SELECTED_HOTEL_KEY); } catch { return null; }
+  });
+  const [searchFilters, setSearchFilters] = useState<Partial<SearchFilters>>(() => {
+    try {
+      const saved = window.sessionStorage.getItem(SEARCH_FILTERS_KEY);
+      return saved ? { ...DEFAULT_FILTERS, ...JSON.parse(saved) as Partial<SearchFilters> } : { ...DEFAULT_FILTERS };
+    } catch { return { ...DEFAULT_FILTERS }; }
+  });
   const [bookingPayload, setBookingPayload] = useState<BookingPayload | null>(null);
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => {
     try {
@@ -81,6 +97,17 @@ function MainApp() {
   useEffect(() => {
     try { window.sessionStorage.setItem(DASHBOARD_TAB_KEY, dashboardTab); } catch { /* stockage indisponible */ }
   }, [dashboardTab]);
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(SEARCH_FILTERS_KEY, JSON.stringify(searchFilters));
+      if (selectedHotelId) window.sessionStorage.setItem(SELECTED_HOTEL_KEY, selectedHotelId);
+      else window.sessionStorage.removeItem(SELECTED_HOTEL_KEY);
+    } catch { /* stockage indisponible */ }
+  }, [searchFilters, selectedHotelId]);
+
+  const getScrollKey = (view: string, hotelId = selectedHotelId) =>
+    view === 'hotel-detail' && hotelId ? `${view}:${hotelId}`
+      : view === 'traveler-dashboard' ? `${view}:${dashboardTab}` : view;
 
   const hasAdminConsoleAccess = role === 'admin' || hasAdminStaffAccess;
   const isAdminView = currentView === 'admin-dashboard' && hasAdminConsoleAccess;
@@ -90,19 +117,41 @@ function MainApp() {
 
   const navigateToView = (view: string) => {
     if (view === currentView) return;
-    viewScrollPositions.current.set(currentView, window.scrollY);
+    viewScrollPositions.current.set(getScrollKey(currentView), window.scrollY);
+    try {
+      window.sessionStorage.setItem(VIEW_SCROLL_KEY, JSON.stringify(Object.fromEntries(viewScrollPositions.current)));
+    } catch { /* restauration du défilement facultative */ }
     setCurrentView(view);
   };
 
   useEffect(() => {
+    const previousRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
     const frame = window.requestAnimationFrame(() => {
       window.scrollTo({
-        top: viewScrollPositions.current.get(currentView) || 0,
+        top: viewScrollPositions.current.get(getScrollKey(currentView)) || 0,
         behavior: 'auto',
       });
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [currentView]);
+    let saveFrame = 0;
+    const savePosition = () => {
+      if (saveFrame) return;
+      saveFrame = window.requestAnimationFrame(() => {
+        saveFrame = 0;
+        viewScrollPositions.current.set(getScrollKey(currentView), window.scrollY);
+        try {
+          window.sessionStorage.setItem(VIEW_SCROLL_KEY, JSON.stringify(Object.fromEntries(viewScrollPositions.current)));
+        } catch { /* restauration du défilement facultative */ }
+      });
+    };
+    window.addEventListener('scroll', savePosition, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (saveFrame) window.cancelAnimationFrame(saveFrame);
+      window.removeEventListener('scroll', savePosition);
+      window.history.scrollRestoration = previousRestoration;
+    };
+  }, [currentView, selectedHotelId, dashboardTab]);
 
   const handleOpenAuth = (mode: 'signin' | 'signup' = 'signin', targetRole: UserRole = 'traveler') => {
     setAuthModalMode(mode);
@@ -175,6 +224,7 @@ function MainApp() {
 
   const handleSelectHotel = (hotelId: string) => {
     setSelectedHotelId(hotelId);
+    viewScrollPositions.current.set(getScrollKey('hotel-detail', hotelId), 0);
     navigateToView('hotel-detail');
   };
 

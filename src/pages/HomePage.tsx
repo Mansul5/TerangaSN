@@ -246,7 +246,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         <section aria-labelledby="featured-title" className="mt-20 sm:mt-24">
           <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-            <div><p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#a1845f]"><Sparkles size={15}/> Sélection Boly</p><h2 id="featured-title" className="mt-2 font-serif text-3xl text-[#193e30] sm:text-4xl">Des adresses à découvrir</h2><p className="mt-2 text-sm text-[#68756d]">De belles expériences, avec des informations claires avant de réserver.</p></div>
+            <div><p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#a1845f]"><Sparkles size={15}/> Sélection TerangaSN</p><h2 id="featured-title" className="mt-2 font-serif text-3xl text-[#193e30] sm:text-4xl">Des adresses à découvrir</h2><p className="mt-2 text-sm text-[#68756d]">De belles expériences, avec des informations claires avant de réserver.</p></div>
             <button onClick={exploreAll} className="inline-flex items-center gap-2 text-sm font-semibold text-[#193e30] hover:underline">Tous les hébergements <ArrowRight size={16}/></button>
           </div>
           {isLoading ? (
@@ -264,7 +264,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         <section className="mt-20 overflow-hidden rounded-[28px] bg-[#193e30] px-6 py-12 text-white sm:mt-24 sm:px-12 sm:py-16">
           <div className="grid items-center gap-8 md:grid-cols-[1.2fr_1fr]">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#e5cba7]">L'esprit Boly</p><h2 className="mt-3 max-w-xl font-serif text-3xl leading-tight sm:text-4xl">Le Sénégal, à vivre pleinement.</h2><p className="mt-4 max-w-lg text-sm leading-7 text-white/80">Un week-end face à l'océan, une parenthèse en famille ou une escapade au vert. Trouvez votre prochaine adresse.</p><button onClick={exploreAll} className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#f2e7d4] px-5 py-3 text-sm font-semibold text-[#193e30] transition hover:bg-white">Trouver mon séjour <ArrowRight size={16}/></button></div>
+            <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#e5cba7]">L'esprit TerangaSN</p><h2 className="mt-3 max-w-xl font-serif text-3xl leading-tight sm:text-4xl">Le Sénégal, à vivre pleinement.</h2><p className="mt-4 max-w-lg text-sm leading-7 text-white/80">Un week-end face à l'océan, une parenthèse en famille ou une escapade au vert. Trouvez votre prochaine adresse.</p><button onClick={exploreAll} className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#f2e7d4] px-5 py-3 text-sm font-semibold text-[#193e30] transition hover:bg-white">Trouver mon séjour <ArrowRight size={16}/></button></div>
             <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
               <div className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 p-4 text-sm"><Search size={19} className="text-[#e5cba7]"/> Recherche simple et intuitive</div>
               <div className="flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 p-4 text-sm"><MapPin size={19} className="text-[#e5cba7]"/> Des destinations dans tout le Sénégal</div>

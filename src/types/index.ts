@@ -1,7 +1,7 @@
 export type UserRole = 'traveler' | 'owner' | 'admin';
 
 /**
- * Types de logements disponibles sur Boly.
+ * Types de logements disponibles sur TerangaSN.
  *
  * Le terme "logement" est désormais le concept générique.
  * "Hôtel" n'est qu'un type parmi les autres.

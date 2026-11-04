@@ -103,10 +103,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       <div className="mx-auto flex h-[76px] w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
         <button id="navbar-brand-logo" type="button" onClick={() => navigate('home')}
-          aria-label="Boly — Accueil"
+          aria-label="TerangaSN — Accueil"
           className="group flex min-w-0 shrink items-center gap-2 rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#B79B69]">
           <span className="min-w-0">
-            <span className="block whitespace-nowrap font-serif text-[30px] font-semibold leading-none tracking-[-0.055em] text-[#193E30] sm:text-[34px]">Boly<span className="ml-0.5 text-[#B69A72]">.</span></span>
+            <span className="block whitespace-nowrap font-serif text-[26px] font-semibold leading-none tracking-[-0.055em] text-[#193E30] sm:text-[30px]">TerangaSN</span>
             <span className="mt-1 hidden text-[10px] font-medium tracking-[0.08em] text-[#7A8078] lg:block">L'art de séjourner au Sénégal</span>
           </span>
         </button>
